@@ -1,0 +1,51 @@
+name: Deck client build
+
+# Builds meridian.exe and the module DLLs and keeps them as a downloadable
+# artifact, so a Steam Deck -- which has no MSVC and cannot build the client
+# itself -- can pull a fresh client with install/steamdeck/deck-sync.sh.
+#
+# Deliberately a separate file from c-cpp.yml: that one comes from upstream,
+# and keeping this apart means merging upstream never conflicts here.
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  client:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The client is 32-bit; that is what runs under Proton on the Deck.
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x86
+
+      # Bclient pulls in util, zlib, libpng and libarchive first.  RELEASE=1
+      # is inherited by the recursive nmake calls, so this is an optimized
+      # build in clientd3d\release.
+      - name: Build client and modules
+        run: nmake /nologo RELEASE=1 Bclient Bmodules
+
+      # The makefiles copy their output into run\localclient as they go.
+      - name: Collect binaries
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/resource | Out-Null
+          Copy-Item run/localclient/meridian.exe   dist/
+          Copy-Item run/localclient/OpenAL32.dll   dist/
+          Copy-Item run/localclient/resource/*.dll dist/resource/
+          Copy-Item install/steamdeck/config.ini   dist/
+          Get-ChildItem -Recurse -File dist |
+            ForEach-Object { "{0,-40} {1,10:N0}" -f $_.FullName.Replace("$PWD\", ''), $_.Length }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meridian-client-win32
+          path: dist/
+          # Each artifact is roughly 7 MB and a free plan allows 500 MB of
+          # artifact storage on private repos, so don't hoard them.
+          retention-days: 14
+          if-no-files-found: error

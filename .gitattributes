@@ -1,0 +1,8 @@
+# Scripts and container files that run on Linux must keep LF endings.  A
+# Windows clone with core.autocrlf=false would otherwise commit CRLF, and bash
+# on the Steam Deck fails on those with "\r: command not found".
+*.sh               text eol=lf
+Dockerfile         text eol=lf
+docker-compose.yml text eol=lf
+.dockerignore      text eol=lf
+*.yml              text eol=lf
