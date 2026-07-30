@@ -399,16 +399,23 @@ admin_table_type admin_set_table[] =
 
 admin_table_type admin_create_table[] =
 {
-	{ AdminCreateAccount, {S,S,S,N}, false,A,NULL, 0, "account",
+	/* MOD (control plane): widened from A to A|M. Upstream restricts these to the
+	   Windows GUI Administration tab, which does not exist in a headless Linux
+	   container and cannot be scripted. This fork drives the world from an
+	   external process over the maintenance socket, so the socket needs them.
+	   Authorised by the repository owner for a local, single-player fork.
+	   The maintenance port has no password and is gated only by IP mask, so it
+	   MUST stay bound to loopback (see docker/docker-compose.yml). */
+	{ AdminCreateAccount, {S,S,S,N}, false,A|M,NULL, 0, "account",
 		"Create account by type (user/admin/dm), name, password" },
-	{ AdminCreateAdmin,   {I,N},   false, A, NULL, 0, "admin",   "Create admin object by account id" },
+	{ AdminCreateAdmin,   {I,N},   false, A|M, NULL, 0, "admin",   "Create admin object by account id" },
 	{ AdminCreateAutomated,{S,S,N},false,A|M,NULL, 0, "automated",
 	"Create account and user by name, password" },
 	{ AdminCreateDM,      {I,N},   false, A|M, NULL, 0, "dm",      "Create DM object by account id" },
-	{ AdminCreateListNode,{S,S,S,S,N},false, A, NULL, 0, "listnode","Create list node" },
-	{ AdminCreateObject,  {S,N},   true, A, NULL, 0, "object",  "Create object by class name and parms" },
-	{ AdminCreateResource,{R,N},   false, A, NULL, 0, "resource","Create resource string" },
-	{ AdminCreateTimer,   {I,S,I,N},false,A, NULL, 0, "timer","Create timer for obj id, message, milli" },
+	{ AdminCreateListNode,{S,S,S,S,N},false, A|M, NULL, 0, "listnode","Create list node" },
+	{ AdminCreateObject,  {S,N},   true, A|M, NULL, 0, "object",  "Create object by class name and parms" },
+	{ AdminCreateResource,{R,N},   false, A|M, NULL, 0, "resource","Create resource string" },
+	{ AdminCreateTimer,   {I,S,I,N},false,A|M, NULL, 0, "timer","Create timer for obj id, message, milli" },
 	{ AdminCreateUser,    {I,N},   false, A|M, NULL, 0, "user",    "Create user object by account id" },
 };
 #define LEN_ADMIN_CREATE_TABLE (sizeof(admin_create_table)/sizeof(admin_table_type))
@@ -431,9 +438,12 @@ admin_table_type admin_send_table[] =
 
 admin_table_type admin_trace_table[] =
 {
-	{ AdminTraceOffMessage, {S,S,N}, false, A, NULL, 0, "off",
+	/* MOD (control plane): widened from A to A|M, same rationale as create.
+	   Useful for observing arbitrary kod messages from outside without having
+	   to add a Debug() hook to each one first. */
+	{ AdminTraceOffMessage, {S,S,N}, false, A|M, NULL, 0, "off",
 	"Stop tracing message by class & msg names " },
-	{ AdminTraceOnMessage,  {S,S,N}, false, A, NULL, 0, "on",  "Trace message by class & message names " },
+	{ AdminTraceOnMessage,  {S,S,N}, false, A|M, NULL, 0, "on",  "Trace message by class & message names " },
 };
 #define LEN_ADMIN_TRACE_TABLE (sizeof(admin_trace_table)/sizeof(admin_table_type))
 

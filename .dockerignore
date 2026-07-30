@@ -1,0 +1,15 @@
+# The server needs none of the client artwork; keep the build context small.
+.git
+run/localclient
+docker/data
+**/debug
+**/release
+**/*.obj
+**/*.exe
+**/*.pdb
+**/*.ilk
+resource/graphics
+resource/textures
+resource/audio
+resource/music
+resource/misc

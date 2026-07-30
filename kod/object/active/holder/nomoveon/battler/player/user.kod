@@ -307,6 +307,13 @@ properties:
 
    vrName = user_name_rsc
 
+   % MOD: vrDesc is declared as a classvar on Object (kod/object.kod), so every
+   % User shares one description and `set object <id> vrDesc ...` is accepted
+   % while silently doing nothing. Redeclaring it as a property here gives each
+   % User its own, matching how vrName and vrIcon already work, so an external
+   % process can describe one character without rewriting everybody's.
+   vrDesc = object_desc_rsc
+
    piHomeroom
 
    plNew_mail = $
@@ -4021,9 +4028,23 @@ messages:
    }
 
    UserSay(type = $,string = $)
-   {      
+   {
       local i, oSpell, lEnchantData;
-        
+
+      % MOD (chat bridge): emit every player utterance to the debug channel in a
+      % fixed, parseable form, so an external process can read in-game speech by
+      % tailing a file.
+      %
+      % Why here rather than `trace on User UserSay`: trace is gated to the
+      % Windows GUI Administration tab, so it cannot be enabled over the
+      % maintenance socket and does not exist at all in a headless container.
+      % This hook is picked up by `reload system`, which the socket may call.
+      %
+      % Note this logs the speech of every player on the server, which is fine
+      % for a local single-player instance and would need revisiting before
+      % anyone else ever logs in.
+      Debug("CHAT|", self, "|", type, "|", string);
+
       % A room can completely block a piece of communication if it chooses.
       % An excellent example is Out Of Grace, which blocks all tells to 
       %  non-DMs, as well as Guild Tells and Broadcasts
@@ -6262,6 +6283,19 @@ messages:
                parm4= $, parm5 = $, parm6 = $, parm7 = $, parm8 = $)
    {
       local rSay_format,rName;
+
+      % MOD (chat bridge): local hearing.
+      %
+      % This message only arrives if this object is actually in the room where
+      % something was said, so the engine does the location filtering. That makes
+      % it the honest hook for an externally-driven avatar: it hears what is said
+      % near it and nothing else, unlike the UserSay hook which sees every
+      % utterance on the server regardless of where it happened.
+      %
+      % Deliberately placed ABOVE the pbLogged_on guard: an avatar driven over the
+      % admin socket has no session, so pbLogged_on is FALSE and anything inside
+      % that block would never run for it.
+      Debug("HEARD|", self, "|", what, "|", type, "|", string);
 
       if pbLogged_on
       {

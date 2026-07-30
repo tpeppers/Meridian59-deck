@@ -1,0 +1,27 @@
+# Meridian 59 server, portable.
+#
+#   docker compose -f docker/docker-compose.yml up --build
+#
+# The client stays on the host (meridian.exe under Proton on a Steam Deck) and
+# connects to localhost:5959. The chat bridge connects to localhost:9998.
+
+services:
+  blakserv:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: m59-blakserv:local
+    container_name: m59
+    ports:
+      # Game port. Open, so a client on the LAN or under Proton can reach it.
+      - "5959:5959"
+      # Admin socket. Loopback only — it is gated by IP mask with no password,
+      # so it must never be reachable off-box.
+      - "127.0.0.1:9998:9998"
+    volumes:
+      # Chat lands here once tracing is on; the bridge tails it from the host.
+      - ./data/channel:/m59/channel
+      - ./data/savegame:/m59/savegame
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
