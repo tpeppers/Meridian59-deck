@@ -149,6 +149,8 @@ OBJS = \
         $(OUTDIR)\xform.obj \
         $(OUTDIR)\signup.obj\
         $(OUTDIR)\preferences.obj\
+        $(OUTDIR)\fullscreen.obj\
+        $(OUTDIR)\gamepad.obj\
 
 $(OUTDIR)\trig.c $(OUTDIR)\trig.h: $(OUTDIR)\maketrig.exe
 	$(OUTDIR)\maketrig.exe $(OUTDIR)

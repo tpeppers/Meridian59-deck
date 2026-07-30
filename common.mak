@@ -41,6 +41,7 @@ MODULEDIR   = $(TOPDIR)\module
 UTILDIR     = $(TOPDIR)\util
 SPROCKETDIR = $(TOPDIR)\sprocket
 CLUBDIR     = $(TOPDIR)\club
+STEAMDECKDIR = $(TOPDIR)\install\steamdeck
 
 # 3rd party libraries
 EXTERNALDIR = $(TOPDIR)\external

@@ -528,6 +528,10 @@ void PerformAction(int action, const void *action_data)
 		UserMouselookToggle();
 		break;
 
+   case A_FULLSCREEN:
+      FullScreenToggle();
+      break;
+
    case A_DEPOSIT:
       UserDeposit();
       break;

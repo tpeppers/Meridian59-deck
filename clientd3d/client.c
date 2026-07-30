@@ -131,6 +131,15 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 
 	case WM_SYSKEYDOWN:
+		// Alt+Enter toggles full screen.  Handled here rather than in MainKey
+		// because WM_SYSKEYUP is also delivered to MainKey as a key *down*,
+		// which would toggle twice per press.  Bit 30 of lParam is the
+		// previous key state; ignore auto-repeat.
+		if (wParam == VK_RETURN && !(lParam & 0x40000000))
+		{
+			FullScreenToggle();
+			return 0;
+		}
 		if (HANDLE_WM_SYSKEYDOWN_BLAK(hwnd, wParam, lParam, MainKey) == true)
 			return 0;
 		break;  // Pass message on to Windows for default menu handling
@@ -305,7 +314,7 @@ void ThemeApply(void)
 	CreateWindowBackground();
 
 	ThemeApplyTitleBar();
-	MenuBarApply(GetMenu(hMain));
+	MenuBarApply(FullScreenGetMenu());
 	DrawMenuBar(hMain);
 
 	MainChangeColor();
@@ -406,8 +415,14 @@ int PASCAL WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmdPa
 
 	MainInitState(STATE_OFFLINE);
 
+	GamepadInit();
+
 	ShowWindow(hMain, showCmd);
 	UpdateWindow(hMain);
+
+	// After the window is shown, so that the windowed placement we remember
+	// to restore to is the one that was just loaded from the INI file.
+	FullScreenRestoreSetting();
 
 	while (!bQuit)
 	{

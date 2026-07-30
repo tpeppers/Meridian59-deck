@@ -488,6 +488,7 @@
 #define ID_OPTIONS_FONT_MAP_LABEL       3509
 #define ID_OPTIONS_FONT_MAP_TEXT        3510
 #define ID_HELP_REQUEST_CS              3511
+#define ID_OPTIONS_FULLSCREEN           3660
 #define IDM_DRAW_MAP                    3512
 #define IDS_INIFILECONFIG               3513
 #define IDC_CLASSIC                     3514

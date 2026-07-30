@@ -1,0 +1,6 @@
+debug.txt
+d3dlog.txt
+.pdb
+.map
+.exp
+.ilk

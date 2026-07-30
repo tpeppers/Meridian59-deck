@@ -131,6 +131,8 @@ typedef struct {
    // for more stable, power-efficient rendering.
    bool gpuEfficiency;
    bool show_inventory_rarity;   /* Add inventory item rarity symbols? */
+
+   bool fullscreen;              /* Borderless full screen window? */
 } Config;
 
 void ConfigInit(void);
@@ -149,6 +151,10 @@ void WindowSettingsLoad(WINDOWPLACEMENT *w);
 
 void TimeSettingsLoad(void);
 void TimeSettingsSave(int download_time);
+
+// Full pathname of config.ini, which holds key/mouse/gamepad bindings and
+// graphics settings.  Valid after ConfigInit.
+char *ConfigGetConfigIni(void);
 
 M59EXPORT int GetConfigInt(char *section, char *key, int default_value, char *fname);
 M59EXPORT bool WriteConfigInt(char *section, char *key, int value, char *fname);

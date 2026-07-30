@@ -89,6 +89,7 @@ static char INIBottom[]      = "NormalBottom";
 static char INIShow[]        = "Show";
 static char INIMaxX[]        = "MaxX";
 static char INIMaxY[]        = "MaxY";
+static char INIFullScreen[]  = "FullScreen";
 
 static char comm_section[]   = "Comm";  /* Section for comm stuff in INI file */
 static char INIPort[]        = "Port";
@@ -187,6 +188,11 @@ void ConfigInit(void)
    ini_file = ini_filename;
 
    snprintf(config_ini, sizeof(config_ini), "%s%s", dir, GetString(hInst, IDS_INIFILECONFIG));
+}
+/****************************************************************************/
+char *ConfigGetConfigIni(void)
+{
+   return config_ini;
 }
 /****************************************************************************/
 /*
@@ -470,9 +476,10 @@ void WindowSettingsSave(void)
 {
    RECT *r;
    WINDOWPLACEMENT w;
-   
-   w.length = sizeof(WINDOWPLACEMENT);
-   GetWindowPlacement(hMain, &w);
+
+   // While full screen the window's own placement is the borderless geometry,
+   // which isn't what we want to restore to when full screen is turned off.
+   FullScreenGetPlacement(&w);
 
    r = &w.rcNormalPosition;
 
@@ -486,6 +493,7 @@ void WindowSettingsSave(void)
    WriteConfigInt(window_section, INIMaxX, w.ptMaxPosition.x, ini_file);
    WriteConfigInt(window_section, INIMaxY, w.ptMaxPosition.y, ini_file);
    WriteConfigInt(window_section, INIShow, w.showCmd, ini_file);
+   WriteConfigInt(window_section, INIFullScreen, config.fullscreen, ini_file);
 }
 /************************************************************************/
 void WindowSettingsLoad(WINDOWPLACEMENT *w)
@@ -510,6 +518,9 @@ void WindowSettingsLoad(WINDOWPLACEMENT *w)
    w->ptMaxPosition.x = GetConfigInt(window_section, INIMaxX, def_x, ini_file);
    w->ptMaxPosition.y = GetConfigInt(window_section, INIMaxY, def_y, ini_file);
    w->showCmd = GetConfigInt(window_section, INIShow, SW_SHOWNORMAL, ini_file);
+
+   // Applied by FullScreenRestoreSetting once the window has been shown.
+   config.fullscreen = GetConfigInt(window_section, INIFullScreen, false, ini_file) != 0;
 }
 
 /********************************************************************/

@@ -75,6 +75,21 @@ client (meridian.exe) with command line flags, like this:
 meridian.exe /U:joe.smith /W:password /H:localhost /P:5959 
 
 
+STEAM DECK
+
+The client runs on the Steam Deck as the normal Windows build under Proton,
+with gamepad support and a full screen toggle built in.  After building,
+type "nmake steamdeck" to stage a Deck-ready client folder in run\steamdeck.
+See install\steamdeck\README.md for the Steam setup steps and the control
+chart.
+
+Gamepad support is not Deck specific: any XInput controller works, on the
+Deck or on a desktop.  The left stick moves, the right stick looks, and the
+buttons are remappable in the [gamepad] section of config.ini.  Full screen
+is on the controller's Menu button, on F11, on Alt+Enter, and in the
+Options menu.
+
+
 RUNNING THE SERVER ON LINUX OR MAC
 
 The server can be built on Linux or Mac with the following commands:

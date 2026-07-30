@@ -10,6 +10,8 @@ EXPORTS
 	SafeRealloc
 	SafeFree
 	PerformAction
+	FullScreenToggle
+	FullScreenIsActive
 	AreYouSure
 	ClientError
 	LookupRsc

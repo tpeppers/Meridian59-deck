@@ -157,7 +157,9 @@ void MainQuit(HWND hwnd)
 	DeleteObject(hPal);
 
 	HookClose();
-	
+
+	GamepadClose();
+
 	FreeLibrary(hRichEditLib);
 
 	D3DRenderShutDown();
@@ -192,10 +194,19 @@ void MainExpose(HWND hwnd)
 /* Return true iff message should NOT be passed to Windows for default processing */
 bool MainKey(HWND hwnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
 {
+	// F11 toggles full screen in every client state, not just in the game, so
+	// it's handled ahead of the modules and the per-state key tables.
+	// Bit 0x4000 of flags is set while the key is being held down.
+	if (vk == VK_F11 && fDown && !(flags & 0x4000))
+	{
+		FullScreenToggle();
+		return true;
+	}
+
 	/* See if a module wants to handle key */
 	if (ModuleEvent(EVENT_KEY, hwnd, vk, fDown, cRepeat, flags) == false)
 		return true;
-	
+
 	switch (state)
 	{
 	case STATE_GAME:
@@ -351,11 +362,16 @@ void MainResize(HWND hwnd, UINT resize_flag, int xsize, int ysize)
 void MainMinMaxInfo(HWND hwnd, MINMAXINFO *lpmmi)
 {
 	SIZE s;
-	
+
 	/* Set minimum size of window */
 	lpmmi->ptMinTrackSize.x = MIN_WINDOW_WIDTH;
 	lpmmi->ptMinTrackSize.y = MIN_WINDOW_HEIGHT;
-	
+
+	// The maximum is the size of a maximized window, which is smaller than a
+	// monitor that isn't the primary one.  Don't let it clip full screen.
+	if (FullScreenIsActive())
+		return;
+
 	InterfaceGetMaxSize(&s);
 	lpmmi->ptMaxTrackSize.x = s.cx;
 	lpmmi->ptMaxTrackSize.y = s.cy;
@@ -475,6 +491,10 @@ void MainEnterIdle(HWND hwnd, UINT source, HWND hwndSource)
 /* Called when event queue is empty */
 void MainIdle(void)
 {
+	// Polled here rather than in GameIdle so that the full screen toggle also
+	// works on the offline, login and character selection screens.
+	GamepadPoll();
+
 	switch(state)
 	{
 	case STATE_GAME:
@@ -525,6 +545,12 @@ void MainActivateApp(HWND hwnd, BOOL fActivate, DWORD dwThreadId)
 	if (fActivate)
 	{
 		EnumChildWindows(hwnd,InvalidateTheWindow,0);
+	}
+	else
+	{
+		// Buttons released while we're in the background would otherwise look
+		// like fresh presses when the window comes back.
+		GamepadReleaseAll();
 	}
 }
 

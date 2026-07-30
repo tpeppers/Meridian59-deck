@@ -139,6 +139,11 @@ void MenuCommand(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
       if (!config.play_sound)
 	 SoundStopAll();
       break;
+   case ID_OPTIONS_FULLSCREEN:
+      // Checks the menu item itself, since the menu is detached while full
+      // screen and reattached on the way back out.
+      FullScreenToggle();
+      break;
    case ID_OPTIONS_SAVENOW:
       SaveSettings();
       break;
@@ -396,7 +401,8 @@ bool MenuBarDrawItem(DRAWITEMSTRUCT *dis)
  */
 void MenuBarShutdown(void)
 {
-   HMENU hMenu = GetMenu(hMain);
+   // Not GetMenu: quitting from full screen leaves the menu detached.
+   HMENU hMenu = FullScreenGetMenu();
    if (hMenu)
    {
       int count = GetMenuItemCount(hMenu);

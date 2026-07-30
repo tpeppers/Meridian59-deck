@@ -101,6 +101,8 @@ BEGIN
             MENUITEM "&Restaurar padrão",           ID_FONT_DEFAULTS
         END
         MENUITEM SEPARATOR
+        MENUITEM "Tela chei&a\tF11",                ID_OPTIONS_FULLSCREEN
+        MENUITEM SEPARATOR
         MENUITEM "Salvar configurações &agora",     ID_OPTIONS_SAVENOW
         MENUITEM "Salvar configurações a&o sair",   ID_OPTIONS_SAVEEXIT
     END
@@ -1120,6 +1122,8 @@ BEGIN
             MENUITEM SEPARATOR
             MENUITEM "&Grundeinstellung",           ID_FONT_DEFAULTS
         END
+        MENUITEM SEPARATOR
+        MENUITEM "Vollbild\tF11",               ID_OPTIONS_FULLSCREEN
         MENUITEM SEPARATOR
         MENUITEM "Einstellungen speichern",     ID_OPTIONS_SAVENOW
         MENUITEM "Beim Verlassen speichern",    ID_OPTIONS_SAVEEXIT
@@ -2145,6 +2149,8 @@ BEGIN
             MENUITEM SEPARATOR
             MENUITEM "&Restore defaults",           ID_FONT_DEFAULTS
         END
+        MENUITEM SEPARATOR
+        MENUITEM "F&ull screen\tF11",           ID_OPTIONS_FULLSCREEN
         MENUITEM SEPARATOR
         MENUITEM "Save settings &now",          ID_OPTIONS_SAVENOW
         MENUITEM "Save settings on e&xit",      ID_OPTIONS_SAVEEXIT

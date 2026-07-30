@@ -467,6 +467,9 @@ static action_label	gActionLabels[] =
 	{"emote",			A_TEXTINSERT,		"emote "},
 	{"who",				A_WHO,				NULL},
 
+	// window
+	{"fullscreen",		A_FULLSCREEN,		NULL},
+
 	// end
 	{"\0", -1, NULL},
 };
@@ -523,6 +526,9 @@ keymap	gCustomKeys[] =
 	{(WORD)-1,				(WORD)-1,				A_TEXTINSERT,		"broadcast "},
 	{(WORD)-1,				(WORD)-1,				A_TEXTINSERT,		"emote "},
 	{(WORD)-1,				(WORD)-1,				A_WHO,				NULL},
+
+	// window
+	{(WORD)-1,				(WORD)-1,				A_FULLSCREEN,		NULL},
 
 	// aliases (fkey hotkeys)
 	{(WORD)-1,				(WORD)-1,				A_TEXTCOMMAND,		NULL},
@@ -695,6 +701,19 @@ void CustomConfigInit(void)
 		fprintf(pFile, "And the optional <modifier> can be: shift, alt, ctrl, or any\n\n");
 		fprintf(pFile, "Use 'any' for keys that you would like to work inclusively with all other actions.  Some good examples of this are the 'attack' and 'mouselooktoggle' actions\n\n");
 
+		fprintf(pFile, "Gamepad settings, also in the [config] section:\n\n");
+
+		fprintf(pFile, "gamepad:  Set to false to ignore controllers entirely\n");
+		fprintf(pFile, "gamepadlookxscale/gamepadlookyscale:  Look stick sensitivity, 1 to 30\n");
+		fprintf(pFile, "gamepadinverty:  Set to true to push the look stick down to look up\n");
+		fprintf(pFile, "gamepadalwaysrun:  Set to true to run at any stick deflection, instead of letting how far you push the stick decide walk or run\n");
+		fprintf(pFile, "gamepadmovedeadzone/gamepadlookdeadzone:  Stick dead zones as a percentage of travel, 0 to 90\n");
+		fprintf(pFile, "gamepadtriggerthreshold:  How far a trigger must be pulled to count as pressed, as a percentage, 0 to 90\n\n");
+
+		fprintf(pFile, "The [gamepad] section maps controller buttons to the same actions the [keys] section uses.  Button names are:\n\n");
+		fprintf(pFile, "a, b, x, y, leftshoulder, rightshoulder, lefttrigger, righttrigger, dpadup, dpaddown, dpadleft, dpadright, leftstick, rightstick, view, menu\n\n");
+		fprintf(pFile, "The sticks are not bindable: the left one moves and the right one looks.  'fullscreen' is an action here as well as in [keys]\n\n");
+
 		fclose(pFile);
 
 		WritePrivateProfileString("config", "initialized", "true", "./config.ini");
@@ -750,6 +769,35 @@ void CustomConfigInit(void)
 		WritePrivateProfileString("keys", "tabbackward", "tab+shift", "./config.ini");
 		WritePrivateProfileString("keys", "mapzoomin", "add", "./config.ini");
 		WritePrivateProfileString("keys", "mapzoomout", "subtract", "./config.ini");
+
+		WritePrivateProfileString("config", "gamepad", "true", "./config.ini");
+		WritePrivateProfileString("config", "gamepadlookxscale", "15", "./config.ini");
+		WritePrivateProfileString("config", "gamepadlookyscale", "10", "./config.ini");
+		WritePrivateProfileString("config", "gamepadinverty", "false", "./config.ini");
+		WritePrivateProfileString("config", "gamepadalwaysrun", "false", "./config.ini");
+		WritePrivateProfileString("config", "gamepadmovedeadzone", "18", "./config.ini");
+		WritePrivateProfileString("config", "gamepadlookdeadzone", "15", "./config.ini");
+		WritePrivateProfileString("config", "gamepadtriggerthreshold", "30", "./config.ini");
+
+		WritePrivateProfileString("gamepad", "a", "open", "./config.ini");
+		WritePrivateProfileString("gamepad", "b", "targetclear", "./config.ini");
+		WritePrivateProfileString("gamepad", "x", "pickup", "./config.ini");
+		WritePrivateProfileString("gamepad", "y", "look", "./config.ini");
+		WritePrivateProfileString("gamepad", "leftshoulder", "targetprevious", "./config.ini");
+		WritePrivateProfileString("gamepad", "rightshoulder", "targetnext", "./config.ini");
+		WritePrivateProfileString("gamepad", "lefttrigger", "targetself", "./config.ini");
+		WritePrivateProfileString("gamepad", "righttrigger", "attack", "./config.ini");
+		WritePrivateProfileString("gamepad", "dpadup", "lookup", "./config.ini");
+		WritePrivateProfileString("gamepad", "dpaddown", "lookdown", "./config.ini");
+		WritePrivateProfileString("gamepad", "dpadleft", "mapzoomout", "./config.ini");
+		WritePrivateProfileString("gamepad", "dpadright", "mapzoomin", "./config.ini");
+		WritePrivateProfileString("gamepad", "leftstick", "flip", "./config.ini");
+		WritePrivateProfileString("gamepad", "rightstick", "lookstraight", "./config.ini");
+
+		// The Steam Deck's "..." button opens the Quick Access Menu and never
+		// reaches the game, so full screen goes on the button next to it.
+		WritePrivateProfileString("gamepad", "view", "map", "./config.ini");
+		WritePrivateProfileString("gamepad", "menu", "fullscreen", "./config.ini");
 	}
 
 	// now check config settings

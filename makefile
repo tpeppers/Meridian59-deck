@@ -100,6 +100,15 @@ Broomedit:
 	$(MAKE) /$(MAKEFLAGS) $(COMMAND)
 	cd ..
 
+# Not part of "all": stages a Steam Deck-ready client folder in run\steamdeck
+# from whatever the client build last put in run\localclient.  Build first,
+# then "nmake steamdeck".
+steamdeck:
+	echo Making $(COMMAND) in $(STEAMDECKDIR)
+	cd $(STEAMDECKDIR)
+	$(MAKE) /$(MAKEFLAGS) $(COMMAND)
+	cd ..\..
+
 clean:
         set COMMAND=clean
         $(MAKE) /$(MAKEFLAGS)
