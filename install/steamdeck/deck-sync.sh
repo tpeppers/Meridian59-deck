@@ -47,16 +47,30 @@ fi
 
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
+# Resolve the repository from the origin remote rather than letting gh guess.
+# A clone that also has an upstream remote -- which is the recommended setup,
+# so upstream stays pullable -- is ambiguous, and gh will happily list the
+# upstream project's runs instead of yours.
+ORIGIN_URL="$(git remote get-url origin)"
+REPO="$(printf '%s' "$ORIGIN_URL" | sed -E 's#^(git@github\.com:|https://[^/]*github\.com/)##; s#\.git$##')"
+
+case "$REPO" in
+    */*) ;;
+    *) echo "error: could not work out the GitHub repo from origin ($ORIGIN_URL)." >&2; exit 1 ;;
+esac
+
+echo "Repository: $REPO   branch: $BRANCH"
+
 if [ "$WAIT" -eq 1 ]; then
-    IN_FLIGHT="$(gh run list --workflow "$WORKFLOW" --branch "$BRANCH" \
+    IN_FLIGHT="$(gh run list --repo "$REPO" --workflow "$WORKFLOW" --branch "$BRANCH" \
         --status in_progress --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
     if [ -n "$IN_FLIGHT" ]; then
-        echo "Waiting for run $IN_FLIGHT on $BRANCH..."
-        gh run watch "$IN_FLIGHT" --exit-status
+        echo "Waiting for run $IN_FLIGHT..."
+        gh run watch --repo "$REPO" "$IN_FLIGHT" --exit-status
     fi
 fi
 
-RUN_ID="$(gh run list --workflow "$WORKFLOW" --branch "$BRANCH" \
+RUN_ID="$(gh run list --repo "$REPO" --workflow "$WORKFLOW" --branch "$BRANCH" \
     --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
 
 if [ -z "$RUN_ID" ]; then
@@ -66,13 +80,13 @@ if [ -z "$RUN_ID" ]; then
 fi
 
 # Report what we're about to install, so a stale artifact is obvious.
-gh run view "$RUN_ID" --json headSha,displayTitle,createdAt \
+gh run view --repo "$REPO" "$RUN_ID" --json headSha,displayTitle,createdAt \
     --jq '"Run \(.createdAt)  \(.headSha[0:8])  \(.displayTitle)"'
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-gh run download "$RUN_ID" --name "$ARTIFACT" --dir "$TMP"
+gh run download --repo "$REPO" "$RUN_ID" --name "$ARTIFACT" --dir "$TMP"
 
 # Only the binaries move.  resource/ holds the artwork as well as the module
 # DLLs, so copy the DLLs in rather than replacing the directory, and never

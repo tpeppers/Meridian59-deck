@@ -149,8 +149,12 @@ without it, the script uses the newest build that has already succeeded.
 - You cannot run Claude Code in Game Mode. The practical rhythm is to play in
   Game Mode, then switch to Desktop Mode to work. Switching does not require a
   reboot, but it does close the running game.
-- Keep `origin` pointed at `Meridian59/Meridian59` and push to your fork's
-  remote, so upstream stays pullable.
+- `origin` is your private fork and `upstream` is `Meridian59/Meridian59`, so
+  plain `git push` and `git pull` stay on your fork and `git pull upstream
+  master` brings in the real project.
+- With two remotes, bare `gh run list` is ambiguous and will happily show
+  upstream's builds instead of yours. `deck-sync.sh` resolves the repo from
+  `origin` itself; for interactive `gh` use, run `gh repo set-default` once.
 - `deck-build.yml` is a separate file from the upstream `c-cpp.yml` on purpose:
   merging upstream will never conflict with it.
 - Verified from Windows: the client and modules build clean, and
