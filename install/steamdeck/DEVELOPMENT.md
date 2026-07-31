@@ -104,6 +104,13 @@ If you would rather not deal with a toolchain at all, skip this entirely:
 kod on Linux and uploads both as the `meridian-server-linux` artifact. It is
 slower than building locally, but it needs nothing installed on the Deck.
 
+```bash
+gh run download --repo <you>/<fork> --name meridian-server-linux --dir server
+chmod +x server/blakserv   # artifact downloads do not keep the exec bit
+```
+
+`server/loadkod` holds the compiled `.bof` bytecode the server loads.
+
 ## The loops
 
 ### Game code (kod) — local, seconds
@@ -158,9 +165,10 @@ minutes a month on a free plan, with Windows billed at 2x and macOS at 10x.
 
 Upstream's `c-cpp.yml` builds Linux, macOS, and both a 32- and 64-bit Windows
 client. Measured on this fork that is about 50 minutes of allowance per push,
-against 11 for `deck-build.yml` — 32 pushes a month versus 181. It is also
-almost entirely redundant here: the 32-bit client duplicates the Deck build,
-the 64-bit one never runs on a Deck, and macOS is not a target.
+against 13 for `deck-build.yml` and Spellcheck together — roughly 32 pushes a
+month versus 150. It is also almost entirely redundant here: the 32-bit client
+duplicates the Deck build, the 64-bit one never runs on a Deck, and macOS is
+not a target.
 
 So `c-cpp.yml` is disabled on this fork, and `deck-build.yml` carries a Linux
 job to keep the server and kod build check. To undo:
@@ -184,8 +192,8 @@ Watch the meter with `gh api /users/<you>/settings/billing/actions`.
   `origin` itself; for interactive `gh` use, run `gh repo set-default` once.
 - `deck-build.yml` is a separate file from the upstream `c-cpp.yml` on purpose:
   merging upstream will never conflict with it.
-- Verified from Windows: the client and modules build clean, and
-  `nmake /nologo RELEASE=1 Bclient Bmodules` — the exact command the CI job runs
-  — produces an optimized build. The Deck-side steps above have not been run on
-  hardware; treat the toolchain section in particular as a starting point rather
-  than a transcript.
+- Verified: both CI jobs pass on the fork. The client artifact carries
+  `meridian.exe`, `OpenAL32.dll` and six module DLLs; the server artifact
+  carries an x86-64 Linux `blakserv` and 1,231 compiled `.bof` files. The
+  Deck-side steps above have *not* been run on hardware — treat the toolchain
+  section in particular as a starting point rather than a transcript.
