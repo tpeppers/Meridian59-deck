@@ -1,11 +1,23 @@
-name: Deck client build
+name: Deck build
 
-# Builds meridian.exe and the module DLLs and keeps them as a downloadable
-# artifact, so a Steam Deck -- which has no MSVC and cannot build the client
-# itself -- can pull a fresh client with install/steamdeck/deck-sync.sh.
+# Everything the Steam Deck needs and cannot build for itself.
+#
+#   client  meridian.exe and the module DLLs, built with MSVC on Windows.
+#           The Deck has no MSVC, so this is the only way it gets a client;
+#           install/steamdeck/deck-sync.sh pulls the artifact.
+#   server  blakserv and the compiled kod, built on Linux.  The Deck *can*
+#           build these natively, but only with a toolchain, and SteamOS has
+#           an immutable root -- so this is the no-toolchain path, and it
+#           doubles as the build check for server and game code changes.
 #
 # Deliberately a separate file from c-cpp.yml: that one comes from upstream,
 # and keeping this apart means merging upstream never conflicts here.
+#
+# On a private repo this replaces c-cpp.yml rather than supplementing it.
+# Actions bills Windows at 2x and macOS at 10x, and c-cpp.yml builds both
+# plus a 64-bit client the Deck never runs -- about 50 minutes of a 2000
+# minute monthly allowance per push, against 11 for this file.  Re-enable it
+# with: gh workflow enable "Build code"
 
 on:
   push:
@@ -47,5 +59,48 @@ jobs:
           path: dist/
           # Each artifact is roughly 7 MB and a free plan allows 500 MB of
           # artifact storage on private repos, so don't hoard them.
+          retention-days: 14
+          if-no-files-found: error
+
+  server:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flex bison
+
+      # Same reason as docker/Dockerfile: the tree builds with -Werror, which
+      # is a reasonable policy for the project and a bad one against whatever
+      # g++ a runner image happens to ship.  A warning here is not a finding.
+      - name: Relax -Werror
+        run: sed -i 's/ -Werror//' common.mak.linux
+
+      - name: Build blakcomp
+        run: make -C blakcomp -f makefile.linux RELEASE=1 -j"$(nproc)"
+
+      # The kod makefile copies the .bof output into run/server/loadkod itself.
+      - name: Compile the kod
+        run: make -C kod -f makefile.linux RELEASE=1
+
+      - name: Build blakserv
+        run: make -C blakserv -f makefile.linux RELEASE=1 -j"$(nproc)"
+
+      - name: Collect server
+        run: |
+          mkdir -p dist-server
+          find . -name blakserv -type f -perm -u+x -newer common.mak.linux \
+            -exec cp {} dist-server/ \; -quit
+          test -x dist-server/blakserv
+          cp -r run/server/loadkod dist-server/
+          du -sh dist-server dist-server/loadkod
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meridian-server-linux
+          path: dist-server/
           retention-days: 14
           if-no-files-found: error

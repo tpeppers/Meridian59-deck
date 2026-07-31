@@ -99,9 +99,10 @@ neither touching the immutable root:
   directory mounted, so `make` in `~/Meridian59` just works. Installs into
   `~/.local`.
 
-If you would rather not deal with a toolchain at all, `c-cpp.yml` already
-builds `blakserv` and the kod on `ubuntu-latest`; that job can upload its
-output the same way `deck-build.yml` does for the client.
+If you would rather not deal with a toolchain at all, skip this entirely:
+`deck-build.yml` has a `server` job that builds `blakserv` and compiles the
+kod on Linux and uploads both as the `meridian-server-linux` artifact. It is
+slower than building locally, but it needs nothing installed on the Deck.
 
 ## The loops
 
@@ -141,8 +142,34 @@ DLLs, and drops them into `~/Games/Meridian59`. It prints the commit the
 artifact was built from, so a stale download is obvious. It will not overwrite
 `config.ini` or `meridian.ini` — those hold your key and pad bindings.
 
+The artifact carries six module DLLs; the installed game has seven.
+`intro.dll` has no source in this repository, so nothing builds it: it ships
+with the game data, like the artwork. `deck-sync.sh` copies the built DLLs in
+alongside whatever is already there rather than replacing the directory, so
+it survives.
+
 Then relaunch from Steam. `--wait` blocks until an in-flight run finishes;
 without it, the script uses the newest build that has already succeeded.
+
+## CI minutes
+
+Actions is free on public repositories and metered on private ones: 2,000
+minutes a month on a free plan, with Windows billed at 2x and macOS at 10x.
+
+Upstream's `c-cpp.yml` builds Linux, macOS, and both a 32- and 64-bit Windows
+client. Measured on this fork that is about 50 minutes of allowance per push,
+against 11 for `deck-build.yml` — 32 pushes a month versus 181. It is also
+almost entirely redundant here: the 32-bit client duplicates the Deck build,
+the 64-bit one never runs on a Deck, and macOS is not a target.
+
+So `c-cpp.yml` is disabled on this fork, and `deck-build.yml` carries a Linux
+job to keep the server and kod build check. To undo:
+
+```bash
+gh workflow enable "Build code"
+```
+
+Watch the meter with `gh api /users/<you>/settings/billing/actions`.
 
 ## Notes
 
