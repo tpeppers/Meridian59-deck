@@ -13,6 +13,11 @@
 #ifndef _SESSION_H
 #define _SESSION_H
 
+/* for MAX_ADMIN_COMMAND, which SESSION_STATE_BYTES below is derived from.
+   admin.h is self-contained, so including it here costs nothing and lets this
+   header stand on its own rather than relying on blakserv.h's ordering. */
+#include "admin.h"
+
 /* for async.c to add bytes it writes */
 extern int transmitted_bytes;
 
@@ -35,7 +40,18 @@ enum { CONN_SOCKET, CONN_CONSOLE };
 enum { STATE_ADMIN, STATE_GAME, STATE_TRYSYNC,
        STATE_SYNCHED, STATE_RESYNC, STATE_MAINTENANCE };
 
-#define SESSION_STATE_BYTES 120
+/* session_state_data is one raw buffer that every per-state struct is cast onto
+   — admin_data, game_data, trysync_data, synched_data, resync_data all point at
+   it — so it has to be at least as large as the biggest of them. InitSession
+   checks exactly that and calls FatalError if it does not hold.
+
+   MOD: derived from MAX_ADMIN_COMMAND rather than a literal, because admin_data
+   is much the largest of the five and the two constants have to move together.
+   They did not, once: raising MAX_ADMIN_COMMAND to 4096 against a hardcoded 120
+   here made the server call FatalError inside InitSession on every platform, and
+   exit before it had opened a socket or written a line anyone would think to
+   look for. Deriving it means that cannot happen again. */
+#define SESSION_STATE_BYTES (MAX_ADMIN_COMMAND + 128)
 
 enum
 {

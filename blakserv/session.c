@@ -46,6 +46,26 @@ void SendBufferList(session_node *s,buffer_node *blist);
 void SessionAddBufferList(session_node *s,buffer_node *blist);
 
 
+/* MOD: the same five invariants InitSession checks below, checked by the
+   compiler instead.
+
+   The runtime checks are correct but they report too late to be useful: a build
+   whose session_state_data is too small dies inside InitSession, before any
+   socket is open and before anything reaches the channel logs, so what an
+   operator sees is a server that exits 1 in silence. Failing the build says
+   which struct outgrew the buffer, and says it to whoever changed it. */
+static_assert(sizeof(admin_data) <= SESSION_STATE_BYTES,
+              "admin_data outgrew session_state_data — raise SESSION_STATE_BYTES "
+              "in session.h (it is derived from MAX_ADMIN_COMMAND in admin.h)");
+static_assert(sizeof(game_data) <= SESSION_STATE_BYTES,
+              "game_data outgrew session_state_data — raise SESSION_STATE_BYTES in session.h");
+static_assert(sizeof(trysync_data) <= SESSION_STATE_BYTES,
+              "trysync_data outgrew session_state_data — raise SESSION_STATE_BYTES in session.h");
+static_assert(sizeof(synched_data) <= SESSION_STATE_BYTES,
+              "synched_data outgrew session_state_data — raise SESSION_STATE_BYTES in session.h");
+static_assert(sizeof(resync_data) <= SESSION_STATE_BYTES,
+              "resync_data outgrew session_state_data — raise SESSION_STATE_BYTES in session.h");
+
 /* InitSession
 *
 * This allocates an array of session nodes for max people that can be connected,
