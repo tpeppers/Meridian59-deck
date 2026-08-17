@@ -218,6 +218,7 @@ M59EXPORT void _cdecl dprintf(const char *fmt,...);
 #include "preferences.h"
 #include "fullscreen.h"
 #include "gamepad.h"
+#include "m59dbg.h"
 
 // Only include externs if compiling main client
 #ifdef BLAKCLIENT

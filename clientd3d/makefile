@@ -44,6 +44,7 @@ OBJS = \
         $(OUTDIR)\list.obj \
         $(OUTDIR)\modules.obj \
         $(OUTDIR)\map.obj \
+        $(OUTDIR)\m59dbg.obj \
         $(OUTDIR)\msgfiltr.obj \
         $(OUTDIR)\loadrsc.obj \
         $(OUTDIR)\protocol.obj \

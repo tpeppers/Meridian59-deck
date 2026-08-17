@@ -157,6 +157,8 @@ void MapInitialize(void)
    if (pMapWalls)
       SafeFree(pMapWalls);
    pMapWalls = NULL;
+
+   DebugInit();
 }
 /*****************************************************************************/
 /*
@@ -164,6 +166,8 @@ void MapInitialize(void)
  */
 void MapClose(void)
 {
+   DebugClose();
+
    DeleteObject(hWallPen);
    DeleteObject(hPlayerPen);
    DeleteObject(hObjectPen);
@@ -222,6 +226,11 @@ void MapDraw( HDC hdc, BYTE *bits, AREA *area, room_type *room, int width, bool 
 	    xoffset = area->x + area->cx / 2 - (int) (player.x * scale);
 	    yoffset = area->y + area->cy / 2 - (int) (player.y * scale);
 
+	    // The full-map branch is believed dead under the D3D renderer, which only ever
+	    // asks for the minimap.  Hooked anyway: costing one call on a path nobody takes
+	    // is cheaper than discovering the belief was wrong while staring at a blank map.
+	    DebugDrawOverlay(hdc, xoffset, yoffset, scale, room);
+
 	    MapDrawWalls(hdc, xoffset, yoffset, scale, room);
        if (config.map_annotations)
           MapDrawAnnotations(hdc, room->annotations, xoffset, yoffset, scale, false, true);
@@ -255,7 +264,11 @@ void MapDraw( HDC hdc, BYTE *bits, AREA *area, room_type *room, int width, bool 
 	       mapCacheScale = scaleMiniMap;
 	       fMapCacheValid = TRUE;
 	    }
-	    if (pMapWalls) 
+	    // BEFORE THE WALLS, so the walls stay legible on top of it — the overlay is
+	    // evidence about the floor and must never hide the geometry it is a claim about.
+	    DebugDrawOverlay(hdc, xoffsetMiniMap, yoffsetMiniMap, scaleMiniMap, room);
+
+	    if (pMapWalls)
 	       MapDrawMiniMapWalls(hdc, xoffsetMiniMap, yoffsetMiniMap, room);
 	    else
 	       MapDrawWalls(hdc, xoffsetMiniMap, yoffsetMiniMap, scaleMiniMap, room);
@@ -636,6 +649,8 @@ void MapEnterRoom(room_type *room)
    {
       debug(("MapEnterRoom:  Couldn't load map for room!\n"));
    }
+
+   DebugEnterRoom((int) player.room_id);
 
    fMapCacheValid = FALSE;
 }

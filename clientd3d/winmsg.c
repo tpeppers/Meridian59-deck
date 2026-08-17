@@ -203,6 +203,13 @@ bool MainKey(HWND hwnd, UINT vk, BOOL fDown, int cRepeat, UINT flags)
 		return true;
 	}
 
+	// The harness debug hotkeys, here for the same reason F11 is: merintr binds every
+	// function key to A_TEXTCOMMAND so that user aliases can claim them, so a key
+	// handled after the modules is a key that sometimes works.  Inert unless
+	// M59_SIGNAL_PORT is set, so a stock player never loses an alias to this.
+	if (DebugKey(vk, fDown, flags))
+		return true;
+
 	/* See if a module wants to handle key */
 	if (ModuleEvent(EVENT_KEY, hwnd, vk, fDown, cRepeat, flags) == false)
 		return true;
@@ -494,6 +501,11 @@ void MainIdle(void)
 	// Polled here rather than in GameIdle so that the full screen toggle also
 	// works on the offline, login and character selection screens.
 	GamepadPoll();
+
+	// Self-throttling; see m59dbg.c.  Here rather than in GameIdle so the caption
+	// still names the account on the login and character-selection screens, which is
+	// exactly when twenty-one identical "Meridian 59" windows are hardest to tell apart.
+	DebugIdle();
 
 	switch(state)
 	{
