@@ -251,7 +251,14 @@ void ConfigLoad(void)
    config.toolbar      = GetConfigInt(interface_section, INIToolbar, true, ini_file);
    config.pain         = GetConfigInt(interface_section, INIPainFX, true, ini_file);
    config.weather      = GetConfigInt(interface_section, INIWeatherFX, false, ini_file);
-   config.antiprofane  = GetConfigInt(interface_section, INIAntiProfane, true, ini_file);
+   // DEFAULT OFF. The incoming filter is a substring matcher with no notion of context,
+   // and on a server being used for development it eats ordinary sentences: a status
+   // report naming two characters and their squares came back to the operator as
+   // "< profane message blocked >", which from either end is indistinguishable from a
+   // message that was never sent. Losing the occasional rude word from a stranger is a
+   // far smaller cost than a channel that silently drops its own traffic, and anybody
+   // who wants it back has a checkbox in preferences.
+   config.antiprofane  = GetConfigInt(interface_section, INIAntiProfane, false, ini_file);
    config.ignoreprofane = GetConfigInt(interface_section, INIIgnoreProfane, false, ini_file);
    config.extraprofane = GetConfigInt(interface_section, INIExtraProfane, false, ini_file);
    config.lagbox       = GetConfigInt(interface_section, INILagbox, true, ini_file);
