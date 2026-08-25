@@ -67,6 +67,7 @@ static bool     dbg_enabled     = false;   // an overlay directory was configure
 static char     dbg_dir[MAX_PATH];
 static int      dbg_port        = 0;       // 0 = no signalling
 static char     dbg_map_url[MAX_PATH];    // base URL of the harness room-view server
+static bool     dbg_recording   = false;  // F9 toggle; the caption says so while it is on
 static bool     dbg_title       = true;
 
 static int      dbg_room        = 0;       // room the loaded overlay is for, 0 = none
@@ -625,7 +626,7 @@ void DebugSignal(const char *kind, const char *detail)
 }
 /*****************************************************************************/
 /*
- * DebugKey:  F5..F8, ahead of the modules.
+ * DebugKey:  F5..F9, ahead of the modules.  F9 toggles recording.
  *
  * AHEAD OF THE MODULES ON PURPOSE.  merintr binds every function key to
  * A_TEXTCOMMAND so that user aliases can claim them, so a key handled after the
@@ -641,6 +642,29 @@ bool DebugKey(UINT vk, BOOL fDown, UINT flags)
 
    switch (vk)
    {
+   /* F9 IS THE RECORD TOGGLE, AND IT IS A TOGGLE RATHER THAN A HOLD ON PURPOSE.
+    *
+    * The thing worth capturing is usually several seconds long and involves both hands on
+    * the movement keys -- a jump, a stuck corner, a doorway that refuses.  Holding a key
+    * through it is not something a person can do while also doing the thing.
+    *
+    * What goes out is a start and a stop, each stamped with where the character was when
+    * it was pressed.  The harness has the timestamps and every ledger it writes; this only
+    * has to say WHEN, and where the human was looking when they said it.  That is the whole
+    * division of labour: the person marks the moment, the machine keeps the evidence. */
+   case VK_F9:
+      dbg_recording = !dbg_recording;
+      {
+         char detail[128];
+         _snprintf_s(detail, sizeof(detail), _TRUNCATE, "%s room=%d sq=%d,%d fine=%d,%d",
+                     dbg_recording ? "start" : "stop",
+                     dbg_num > 0 ? dbg_num : (int) player.room_id,
+                     (player.y >> LOG_FINENESS) + 1,
+                     (player.x >> LOG_FINENESS) + 1,
+                     player.x, player.y);
+         DebugSignal("record", detail);
+      }
+      return true;
    case VK_F5:  DebugSignal("key", "F5");  return true;
    case VK_F6:  DebugSignal("key", "F6");  return true;
    case VK_F7:  DebugSignal("key", "F7");  return true;
@@ -725,8 +749,12 @@ void DebugIdle(void)
       // that is the convention every tool, every log line and every bug report in the
       // harness uses.  The client's own 0-based index is a different number for the
       // same place, and a person reading one and typing the other is a whole evening.
+      // RECORDING IS SAID AT THE END, IN WORDS, because the whole point of the toggle is
+      // that a person can glance up and know whether the thing they are about to do is
+      // being captured.  A silent recorder is worse than none: it is a person doing the
+      // interesting thing twice, once outside the window.
       _snprintf_s(title, sizeof(title), _TRUNCATE,
-                  "M59%s%s | %d %s | sq %d,%d | fine %d,%d%s%s",
+                  "M59%s%s | %d %s | sq %d,%d | fine %d,%d%s%s%s",
                   config.username[0] ? " " : "",
                   config.username[0] ? config.username : "",
                   (int) player.room_id,
@@ -735,7 +763,8 @@ void DebugIdle(void)
                   (player.x >> LOG_FINENESS) + 1,
                   player.x, player.y,
                   dbg_status[0] ? " | " : "",
-                  dbg_status[0] ? dbg_status : "");
+                  dbg_status[0] ? dbg_status : "",
+                  dbg_recording ? "  [* RECORDING *]" : "");
       SetWindowText(hMain, title);
    }
 }
