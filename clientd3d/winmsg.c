@@ -27,6 +27,24 @@ extern RECT		gD3DRect;
 /****************************************************************************/
 void StartHelp(void)
 {
+	/* THE HELP KEY IS THE DEBUG BUTTON IN THIS BUILD, AND ONLY IN THIS BUILD.
+	 *
+	 * Stock, this opens https://www.meridian59.com/guides/ -- a page for someone learning
+	 * to play. Nobody running a harness build is asking that question. They are standing
+	 * somewhere odd wondering why the bots keep failing here, and the answer is the room
+	 * view the harness serves: the coarse grid, the BSP floor, the baked rail, the packets
+	 * that were actually sent, and every refusal recorded on those squares.
+	 *
+	 * Set M59_MAP_URL to switch it over (see DebugInit). Unset -- which is every stock
+	 * run -- and this is byte for byte what it always did. */
+	char url[MAX_PATH];
+
+	if (DebugRoomURL(url, sizeof(url)))
+	{
+		WebLaunchBrowser(url);
+		return;
+	}
+
 	WebLaunchBrowser(GetString(hInst, IDS_HELPFILE));
 }
 /****************************************************************************/

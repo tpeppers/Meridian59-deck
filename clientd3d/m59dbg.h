@@ -26,5 +26,9 @@ bool DebugKey(UINT vk, BOOL fDown, UINT flags);
 // Send one event to whatever is listening on the signal port.  Never blocks and
 // never fails loudly: this is a debugging aid, not a feature of the game.
 void DebugSignal(const char *kind, const char *detail);
+// The harness's page for the room we are in, when M59_MAP_URL is set and the room is
+// one the harness can name. False means "no opinion" and the caller should do whatever
+// it did before. See StartHelp in winmsg.c.
+bool DebugRoomURL(char *out, size_t len);
 
 #endif /* #ifndef _M59DBG_H */

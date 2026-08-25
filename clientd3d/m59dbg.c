@@ -66,6 +66,7 @@ typedef struct {
 static bool     dbg_enabled     = false;   // an overlay directory was configured
 static char     dbg_dir[MAX_PATH];
 static int      dbg_port        = 0;       // 0 = no signalling
+static char     dbg_map_url[MAX_PATH];    // base URL of the harness room-view server
 static bool     dbg_title       = true;
 
 static int      dbg_room        = 0;       // room the loaded overlay is for, 0 = none
@@ -106,6 +107,31 @@ static bool OverlayPath(int room_id, char *out, size_t len)
 
    n = _snprintf_s(out, len, _TRUNCATE, "%s\\%d.ovl", dbg_dir, room_id);
    return n > 0;
+}
+/*****************************************************************************/
+/*
+ * DebugRoomURL:  The harness's page for the room we are standing in, if we can name it.
+ *
+ *   THE ROOM NUMBER IS NOT player.room_id.  The client knows the room by its server
+ *   OBJECT id -- room 108 is object 751 -- and the harness keys everything by the kod
+ *   room number.  The two are not derivable from one another here, and guessing would
+ *   open a confidently wrong map, which is worse than opening none.
+ *
+ *   `dbg_num` is the harness's own number, read out of the overlay file's header when the
+ *   overlay was loaded, so it is available exactly when the harness has something to say
+ *   about this room.  When it is absent -- no overlay for this room -- this opens the
+ *   server's index instead, which lists every room it can draw.  That is an honest answer
+ *   and one click from the right page.
+ */
+bool DebugRoomURL(char *out, size_t len)
+{
+   if (dbg_map_url[0] == 0)
+      return false;
+
+   if (dbg_num > 0)
+      return _snprintf_s(out, len, _TRUNCATE, "%s/%d", dbg_map_url, dbg_num) > 0;
+
+   return _snprintf_s(out, len, _TRUNCATE, "%s/", dbg_map_url) > 0;
 }
 /*****************************************************************************/
 /*
@@ -402,6 +428,14 @@ void DebugInit(void)
 
    if (getenv_s(&got, buf, sizeof(buf), "M59_DEBUG_TITLE") == 0 && got > 1)
       dbg_title = (atoi(buf) != 0);
+
+   /* WHERE THE MAP OF THIS ROOM LIVES.  Same shape as the settings above: an environment
+    * variable, absent by default, so a stock run of this client is unchanged.  Set it and
+    * the help key stops opening the public guides and starts opening what the HARNESS
+    * believes about the room you are standing in -- which is the question anybody running
+    * this build actually has.  See StartHelp in winmsg.c. */
+   if (getenv_s(&got, buf, sizeof(buf), "M59_MAP_URL") == 0 && got > 1)
+      strncpy_s(dbg_map_url, sizeof(dbg_map_url), buf, _TRUNCATE);
 
    if (dbg_port > 0)
    {
