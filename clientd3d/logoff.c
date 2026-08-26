@@ -107,19 +107,22 @@ void UserDidSomething(void)
  */
 void LogoffTimerStart(void)
 {
-   UINT delay;
-
-   if (config.timeout == 0)
-      return;
-
-   delay = (UINT) (std::min((long) ((long) config.timeout * MS_PER_MINUTE), (long)MAXTIMERMS));
-   timer_id = SetTimer(NULL, 0, (UINT) delay, LogoffTimerProc);
-   if (timer_id == 0)
-   {
-      ClientError(hInst, hMain, IDS_NOTIMERS);
-      return;
-   }
-   UserDidSomething();  /* Start the clock... */
+   /* HARNESS: THE IDLE LOGOFF IS REMOVED FROM THIS BUILD.
+    *
+    * Stock, this arms a timer that quits the session once config.timeout minutes pass
+    * with no key or click (meridian.ini [Miscellaneous] Timeout, 20 by default), and
+    * nothing in the launch can switch it off: the setting is per-machine, is rewritten
+    * on exit, and a character left on screen overnight to gather data is simply gone
+    * by morning with a clean REQ_QUIT in the log and no other trace.  The clients
+    * this binary is built for are watched by a broker that keeps them alive on purpose,
+    * so the timer never arms here.  The Timeout dialog still exists and still saves
+    * its number, and the number is not read.  A player who wants a client that logs
+    * off on its own wants the stock binary.
+    *
+    * Nothing is armed, so LogoffTimerProc below is never entered; it is kept so the
+    * diff against stock stays one function long.
+    */
+   UserDidSomething();
 }
 /************************************************************************/
 /*
