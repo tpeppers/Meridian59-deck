@@ -12,8 +12,19 @@
 #include "client.h"
 
 #define MAX_PURCHASE 500
+/* HARNESS: what the quantity box opens at for a stackable item bought from a merchant.
+ * Stock seeds it with the merchant's own stack size -- 5 for herbs, 4 for elderberries
+ * at Morrigan's -- which is never the number anybody restocking reagents wants, so every
+ * purchase began by retyping it.  Withdrawals keep the stock behaviour, because there the
+ * stack IS the ceiling and "all of it" is the right opening offer. */
+#define DEFAULT_PURCHASE 50
 
 static BuyDialogStruct *info = NULL;
+/* HARNESS: which of the two dialogs BuyInitDialog is serving. Buying and withdrawing
+ * share the init and the selection handler and differ only in what a stackable item's
+ * quantity should open at -- see DEFAULT_PURCHASE. Set by BuyList/WithdrawalList before
+ * the dialog is created, because the handlers get no other word about it. */
+static BOOL dialog_is_withdrawal = FALSE;
 
 static HWND hwndBuyDialog = NULL;   /* Non-NULL when Buy dialog is displayed */
 
@@ -211,7 +222,7 @@ static void ClickOnQuantity(HWND hDlg, BOOL bLimitToAmount)
 	 if (bLimitToAmount)
 	    maxAmount = obj->amount;
 	 if (currentAmount == 0)
-	    startAmount = obj->amount;
+	    startAmount = bLimitToAmount ? obj->amount : std::min(DEFAULT_PURCHASE, maxAmount);
 	 /* Place amount dialog just beneath selected item */
 	 ItemListMeasureItem(info->hwndQuanList, &m);
 	 // Force highlight on (we are editing it)
@@ -273,7 +284,9 @@ static void HandleSelectionChange(void)
    if (ListBox_GetSel(info->hwndItemList,index))
    {
       if (IsNumberObj(obj->id))
-	 amount = obj->amount;
+	 /* HARNESS: selecting a stackable item is what seeds the quantity column, and
+	  * this -- not the number box -- is the 5 and the 4 you saw at Morrigan's. */
+	 amount = dialog_is_withdrawal ? obj->amount : std::min(DEFAULT_PURCHASE, MAX_PURCHASE);
       else
 	 amount = 1;
       snprintf(temp, sizeof(temp), "%d", amount);
@@ -476,6 +489,7 @@ void BuyList(object_node seller, list_type items)
    dlg_info.seller_name = seller.name_res;
    dlg_info.cost = 0;
 
+   dialog_is_withdrawal = FALSE;
    if (hwndBuyDialog == NULL)
       /* Give user list of things to select from */
       SafeDialogBoxParam(hInst, MAKEINTRESOURCE(IDD_BUY), hMain, BuyDialogProc, (LPARAM) &dlg_info);
@@ -505,6 +519,7 @@ void WithdrawalList(object_node seller, list_type items)
    dlg_info.seller_name = seller.name_res;
    dlg_info.cost = 0;
 
+   dialog_is_withdrawal = TRUE;
    if (hwndBuyDialog == NULL)
       /* Give user list of things to select from */
       SafeDialogBoxParam(hInst, MAKEINTRESOURCE(IDD_WITHDRAWAL), hMain, WithdrawalDialogProc, (LPARAM) &dlg_info);

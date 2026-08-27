@@ -246,7 +246,18 @@ void ConfigLoad(void)
    config.drawmap      = GetConfigInt(interface_section, INIDrawMap, true, ini_file);
    config.tooltips     = GetConfigInt(interface_section, INITooltips, true, ini_file);
    config.inventory_num= GetConfigInt(interface_section, INIInventory, true, ini_file);
-   config.aggressive   = GetConfigInt(interface_section, INIAggressive, false, ini_file);
+   /* HARNESS: THE SAFETY IS ON AT EVERY LOGIN.
+    *
+    * Stock, this reads [Interface] Aggressive back from the ini, and merintr's
+    * InterfaceInit/InterfaceResetData turn it into the UC_SAFETY the server is sent on
+    * entering the game (module/merintr/mermain.c) -- so one `safetyoff` typed in some
+    * earlier session is written out at exit and quietly comes back as "safety off"
+    * for every session after it.  The characters this build is for share a server with
+    * other players, and a client that arrives able to strike them is the worse default.
+    * So the value is not read: every login sends safety ON, and `safetyoff` or the
+    * preferences dialog still turns it off for the rest of that session only.
+    */
+   config.aggressive   = false;
    config.bounce       = GetConfigInt(interface_section, INIBounce, true, ini_file);
    config.toolbar      = GetConfigInt(interface_section, INIToolbar, true, ini_file);
    config.pain         = GetConfigInt(interface_section, INIPainFX, true, ini_file);
