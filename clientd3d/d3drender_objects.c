@@ -1255,10 +1255,21 @@ void D3DRenderOverlaysDraw(
 						}
 					}
 
-					if (pRNode->obj.id != INVALID_ID 
-						&& pRNode->obj.id == GetUserTargetID() 
+					// Draw the halo for the player's own target, and for anything the
+					// harness has pointed at.  See DebugAnnotationFor in m59dbg.h: with
+					// annotations switched off it returns false on its first line, so this
+					// is the stock condition plus one predictable branch.
+					if (pRNode->obj.id != INVALID_ID
+						&& (pRNode->obj.id == GetUserTargetID()
+							|| DebugAnnotationFor(pRNode->obj.id, NULL))
 						&& !IsInvisibleEffect(pRNode->obj.flags))
 					{
+						// Asked again here for the colour.  Two scans of a sixteen-entry table
+						// is cheaper than threading a second output through the condition, and
+						// only annotated objects pay for the second one.
+						COLORREF annotationColour = 0;
+						const bool bAnnotated = DebugAnnotationFor(pRNode->obj.id, &annotationColour);
+
 						pPacket = D3DRenderPacketFindMatch(objectsRenderParams.renderPool, NULL, pDibOv, xLat0, xLat1,
 							GetDrawingEffect(pRNode->obj.flags));
 						if (NULL == pPacket)
@@ -1266,7 +1277,11 @@ void D3DRenderOverlaysDraw(
 						pPacket->pMaterialFctn = &D3DMaterialObjectPacket;
 
 						pChunk = D3DRenderChunkNew(pPacket);
-						assert(pChunk);
+						// Never assert here.  assert() is compiled out of a release build,
+						// so the next line would dereference NULL; a debugging aid must cost
+						// a missing halo, never the session.
+						if (NULL == pChunk)
+							continue;
 
 						pChunk->flags = pRNode->obj.flags | OF_TRANSLUCENT50;
 						pChunk->numIndices = 4;
@@ -1297,7 +1312,18 @@ void D3DRenderOverlaysDraw(
 							pChunk->xyz[i].y = 0;
 							pChunk->xyz[i].z = xyz[i].z;
 
-							switch (config.halocolor)
+							if (bAnnotated)
+							{
+								// Flat and unmodulated, unlike the halo below it.  The whole point of
+								// an annotation is "this one, right here", and a highlight scaled by
+								// room light is faintest in exactly the dark rooms where picking one
+								// skeleton out of four matters most.
+								pChunk->bgra[i].b = GetBValue(annotationColour);
+								pChunk->bgra[i].g = GetGValue(annotationColour);
+								pChunk->bgra[i].r = GetRValue(annotationColour);
+								pChunk->bgra[i].a = 255;
+							}
+							else switch (config.halocolor)
 							{
 							case 0:
 								pChunk->bgra[i].b = 0;
@@ -1792,17 +1818,32 @@ void D3DRenderObjectsDraw(
 			}
 		}
 
-		if (pRNode->obj.id != INVALID_ID 
-			&& pRNode->obj.id == GetUserTargetID()
+		// Draw the halo for the player's own target, and for anything the
+		// harness has pointed at.  See DebugAnnotationFor in m59dbg.h: with
+		// annotations switched off it returns false on its first line, so this
+		// is the stock condition plus one predictable branch.
+		if (pRNode->obj.id != INVALID_ID
+			&& (pRNode->obj.id == GetUserTargetID()
+				|| DebugAnnotationFor(pRNode->obj.id, NULL))
 			&& !IsInvisibleEffect(pRNode->obj.flags))
 		{
+			// Asked again here for the colour.  Two scans of a sixteen-entry table
+			// is cheaper than threading a second output through the condition, and
+			// only annotated objects pay for the second one.
+			COLORREF annotationColour = 0;
+			const bool bAnnotated = DebugAnnotationFor(pRNode->obj.id, &annotationColour);
+
 			pPacket = D3DRenderPacketFindMatch(objectsRenderParams.renderPool, NULL, pDib, xLat0, xLat1,
 				GetDrawingEffect(pRNode->obj.flags));
 			if (NULL == pPacket)
 				return;
 			pPacket->pMaterialFctn = &D3DMaterialObjectPacket;
 			pChunk = D3DRenderChunkNew(pPacket);
-			assert(pChunk);
+			// Never assert here.  assert() is compiled out of a release build,
+			// so the next line would dereference NULL; a debugging aid must cost
+			// a missing halo, never the session.
+			if (NULL == pChunk)
+				return;
 
 			pChunk->flags = pRNode->obj.flags | OF_TRANSLUCENT50;
 			pChunk->numIndices = 4;
@@ -1832,7 +1873,18 @@ void D3DRenderObjectsDraw(
 				pChunk->xyz[i].y = 0;
 				pChunk->xyz[i].z = xyz[i].z;
 
-				switch (config.halocolor)
+				if (bAnnotated)
+				{
+					// Flat and unmodulated, unlike the halo below it.  The whole point of
+					// an annotation is "this one, right here", and a highlight scaled by
+					// room light is faintest in exactly the dark rooms where picking one
+					// skeleton out of four matters most.
+					pChunk->bgra[i].b = GetBValue(annotationColour);
+					pChunk->bgra[i].g = GetGValue(annotationColour);
+					pChunk->bgra[i].r = GetRValue(annotationColour);
+					pChunk->bgra[i].a = 255;
+				}
+				else switch (config.halocolor)
 				{
 				case 0:
 					pChunk->bgra[i].b = 0;

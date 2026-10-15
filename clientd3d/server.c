@@ -960,6 +960,12 @@ bool HandleLook(char *ptr, long len)
 	 return false;
    }
 
+   // Optional native metadata observer. This sees only this already-decoded reply;
+   // it cannot request another look and old modules need not implement the export.
+   typedef void (__cdecl *ObservedDescription)(unsigned int,const char*,const char*);
+   HMODULE interfaceModule=GetModuleHandleA("merintr.dll");
+   auto observed=interfaceModule?(ObservedDescription)GetProcAddress(interfaceModule,"M59ObservedDescription"):NULL;
+   if(observed)observed(GetObjId(obj.id),LookupNameRsc(obj.name_res),msg);
    DisplayDescription(&obj, flags, (pane? inscr : NULL), msg, NULL, obj.rarity);
    ObjectDestroy(&obj);
 

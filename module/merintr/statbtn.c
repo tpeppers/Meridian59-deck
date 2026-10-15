@@ -14,6 +14,8 @@
 
 #include "client.h"
 #include "merintr.h"
+#include "clientcontext.h"
+#include "planpane.h"
 
 typedef struct {
   int idLeft;           // Windows resource id of bitmaps used for left, middle, and right pieces of button.
@@ -32,13 +34,16 @@ typedef struct {
   StatGroup group;      // Stat group this button represents
 } StatButton;
 
-#define NUM_BUTTONS 4
+#define NUM_BUTTONS 6
+static int VisibleButtons(){return ClientContextEnabled()?6:4;}
 
 static StatButton buttons[NUM_BUTTONS] = {
    { IDB_SBUTTON4_LEFT, IDB_SBUTTON4_MID, IDB_SBUTTON4_RIGHT, NULL, NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, IDS_TT_INVENTORY, StatGroup::STATS_INVENTORY },
    { IDB_SBUTTON2_LEFT, IDB_SBUTTON2_MID, IDB_SBUTTON2_RIGHT, NULL, NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, IDS_TT_SPELLS, StatGroup::STATS_SPELLS},
    { IDB_SBUTTON3_LEFT, IDB_SBUTTON3_MID, IDB_SBUTTON3_RIGHT, NULL, NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, IDS_TT_SKILLS, StatGroup::STATS_SKILLS},
    { IDB_SBUTTON1_LEFT, IDB_SBUTTON1_MID, IDB_SBUTTON1_RIGHT, NULL, NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, IDS_TT_STATS, StatGroup::STATS_CHARACTER},
+   { IDB_SBUTTON1_LEFT, IDB_SBUTTON1_MID, IDB_SBUTTON1_RIGHT, NULL, NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, 0, STATS_DUM},
+   { IDB_SBUTTON1_LEFT, IDB_SBUTTON1_MID, IDB_SBUTTON1_RIGHT, NULL, NULL, NULL, NULL, 0, 0, 0, 0, 0, 0, 0, 0, STATS_PLAN},
 };
 
 /* Keys to override default actions */
@@ -119,10 +124,10 @@ void StatButtonsDestroy(void)
  */
 void StatsSetButtons(int num_groups)
 {
-   if (num_groups == NUM_BUTTONS + 1)
+   if (num_groups == 5) // Server group count is unchanged by client-only tabs.
      StatsCreateButtons();
    else
-      debug(("StatsSetButtons got %d buttons; expecting %d\n", num_groups, NUM_BUTTONS + 1));
+      debug(("StatsSetButtons got %d groups; expecting 5\n", num_groups));
 }
 /************************************************************************/
 /*
@@ -138,6 +143,9 @@ void StatsCreateButtons(void)
       StatButton* button = &buttons[i];
       if (button->hwnd != NULL)
          DestroyWindow(button->hwnd);
+
+      button->hwnd = NULL;
+      if (i >= VisibleButtons()) continue;
 
       button->hwnd = CreateWindow("button", NULL, WS_CHILD | BS_OWNERDRAW,
          0, 0, 0, 0, hStats, (HMENU) IDC_STATBUTTON, hInst, NULL);
@@ -181,13 +189,15 @@ void StatsMoveButtons(void)
 		if( button->hwnd == NULL )
 			continue;
 
-		x = ( stats_area.cx / NUM_BUTTONS ) * i;
+		if(i >= VisibleButtons()) {ShowWindow(button->hwnd,SW_HIDE);continue;}
+		const int count=VisibleButtons();
+		x = ( stats_area.cx / count ) * i;
 		y = 0;
-		if( i < NUM_BUTTONS - 1 )
-			button->width = ( stats_area.cx / NUM_BUTTONS );
+		if( i < count - 1 )
+			button->width = ( stats_area.cx / count );
 		else
 			//	Undo possible roundoff error by stretching final button.
-			button->width = stats_area.cx - (int)( stats_area.cx / NUM_BUTTONS ) * ( NUM_BUTTONS - 1 );
+			button->width = stats_area.cx - (int)( stats_area.cx / count ) * ( count - 1 );
 
 		MoveWindow( button->hwnd, x, y, button->width, button->height, TRUE );
 		ShowWindow( button->hwnd, SW_SHOWNORMAL );
@@ -303,6 +313,16 @@ bool StatButtonDrawItem(HWND hwnd, const DRAWITEMSTRUCT *lpdis)
 	case ODA_DRAWENTIRE:
 		// Draw bitmap, if button has one
       StatButton* button = FindStatsButtonByHwnd(lpdis->hwndItem);
+		if(button && ClientContextGroup(button->group)) {
+			RECT r=lpdis->rcItem;bool pressed=(lpdis->itemState & ODS_SELECTED)||StatsGetCurrentGroup()==button->group;
+			bool held=false;const char* caption=button->group==STATS_DUM?"DUM":PlanPaneButtonLabel(&held);
+			if(held){HBRUSH b=CreateSolidBrush(pressed?RGB(140,30,30):RGB(190,45,45));FillRect(lpdis->hDC,&r,b);DeleteObject(b);}
+			else FillRect(lpdis->hDC,&r,GetSysColorBrush(pressed?COLOR_3DSHADOW:COLOR_BTNFACE));
+			DrawEdge(lpdis->hDC,&r,pressed?EDGE_SUNKEN:EDGE_RAISED,BF_RECT);
+			int saved=SaveDC(lpdis->hDC);SetBkMode(lpdis->hDC,TRANSPARENT);SetTextColor(lpdis->hDC,held?RGB(255,255,255):GetSysColor(COLOR_BTNTEXT));
+			SelectObject(lpdis->hDC,GetStockObject(DEFAULT_GUI_FONT));DrawTextA(lpdis->hDC,caption,-1,&r,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
+			RestoreDC(lpdis->hDC,saved);return true;
+		}
 		if( button == nullptr || button->bitsLeft == NULL )
 		{
 			FillRect(lpdis->hDC, &lpdis->rcItem, (HBRUSH) GetStockObject(LTGRAY_BRUSH));
@@ -369,6 +389,13 @@ void StatButtonCommand(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
  */
 void StatsSetActiveGroup(StatGroup group)
 {
+	if(ClientContextGroup(group) && !ClientContextEnabled())group=STATS_INVENTORY;
+	if(ClientContextGroup(group)) {
+		SetStatGroup(group);ShowInventory(false);DisplayClientContextGroup(group);
+		for(int i=0;i<NUM_BUTTONS;i++)if(buttons[i].hwnd)InvalidateRect(buttons[i].hwnd,NULL,FALSE);
+		return;
+	}
+	ClientContextHide();
 	// Record which group is now active (inventory, spells, skills or stats)
 	// Used to restore correct ui state following a system save.
 	SetStatGroup(group);
@@ -386,7 +413,7 @@ void StatsSetActiveGroup(StatGroup group)
 		if( group == StatGroup::STATS_INVENTORY )
 		{
 			//	The hacks continue... Force previously toggled non-inventory button to repaint and show new unpressed state.
-			InvalidateRect( old_button->hwnd, NULL, FALSE );
+			if(old_button)InvalidateRect( old_button->hwnd, NULL, FALSE );
 
 			StatsShowGroup( false );
 			ShowInventory( true );
@@ -426,7 +453,7 @@ void StatsMoveButtonFocus(bool forward)
    {
       if (buttons[button_index].group == group)
       {
-         button_index = (button_index + (forward ? 1 : -1)) % NUM_BUTTONS;
+         button_index = (button_index + VisibleButtons() + (forward ? 1 : -1)) % VisibleButtons();
          StatsSetActiveGroup(buttons[button_index].group);
          return;
       }

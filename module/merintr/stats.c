@@ -15,6 +15,7 @@
 
 #include "client.h"
 #include "merintr.h"
+#include "clientcontext.h"
 
 HWND hStats;                        // Window containing stats area.
 static list_type stats = NULL;      // List of stats currently being processed.
@@ -42,6 +43,7 @@ void StatsCreate(HWND hParent)
   group_type = StatGroupType::INVALID_TYPE;
   StatCacheCreate();
   StatButtonsCreate();
+  ClientContextCreate(hStats);
   RequestStatGroups();   
 }
 /************************************************************************/
@@ -119,6 +121,7 @@ void StatsCommand(HWND hwnd, int id, HWND hwndCtl, UINT codeNotify)
  */
 void StatsDestroy(void)
 {
+   ClientContextDestroy();
    StatsDestroyGroup();
    StatsDestroyButtons();
    stats = NULL;     // Actual list freed by cache
@@ -251,6 +254,7 @@ void ActivateInventory()
  */
 void ActivateStatGroup(StatGroup stat_group)
 {
+	if(ClientContextGroup(stat_group)){StatsSetActiveGroup(stat_group);return;}
 	list_type stat_list;
 	if (StatCacheGetEntry(stat_group, &stat_list) == true)
 	{
@@ -269,6 +273,8 @@ void ActivateStatGroup(StatGroup stat_group)
 void RestoreActiveStatGroup()
 {
 	StatGroup active_stat_group = GetStatGroup();
+	if(ClientContextGroup(active_stat_group)){StatsSetActiveGroup(active_stat_group);return;}
+	ClientContextHide();
 	bool inventory_group = (active_stat_group == StatGroup::STATS_INVENTORY);
 	StatsShowGroup(!inventory_group);
 	ShowInventory(inventory_group);
@@ -346,6 +352,7 @@ void StatsDestroyGroup(void)
  */
 void StatsMove(void)
 {
+   ClientContextResize();
    switch(group_type)
    {
    case STATS_NUMERIC:
@@ -383,6 +390,7 @@ void StatsDraw(void)
  */
 void StatChange(StatGroup group, Statistic *s)
 {
+   ClientContextStat(group,s);
    Statistic *new_stat;
 
    new_stat = StatCacheUpdate(group, s);
@@ -421,9 +429,10 @@ void StatRedraw(Statistic *s)
  */
 void StatsReceiveGroup(StatGroup group, list_type l)
 {
+   for(list_type entry=l;entry;entry=entry->next)ClientContextStat(group,(Statistic*)entry->data);
 	if (group == STATS_MAIN)
 		StatsMainReceive(l);
-	else 
+	else if(!ClientContextGroup(current_group))
 	{
 		//	ajw added 5/22/97
 		//	This fixes the bug that occurred when the server sends new spells/skills when Inventory is the
@@ -463,6 +472,7 @@ StatGroup StatsGetCurrentGroup(void)
  */
 void DisplayStatGroup(StatGroup group, list_type l)
 {
+   ClientContextHide();
    current_group = group;
 
    StatsDestroyGroup();
@@ -487,6 +497,12 @@ void DisplayStatGroup(StatGroup group, list_type l)
 void DisplayInventoryAsStatGroup( StatGroup group )
 {
 	current_group = group;
+}
+
+void DisplayClientContextGroup(StatGroup group)
+{
+   StatsDestroyGroup();stats=NULL;group_type=StatGroupType::INVALID_TYPE;
+   current_group=group;ClientContextShow(group);
 }
 
 /************************************************************************/

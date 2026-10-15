@@ -18,6 +18,8 @@ $(OUTDIR)\merintr.dll: \
       $(OUTDIR)\enchant.obj \
       $(OUTDIR)\inventry.obj \
       $(OUTDIR)\stats.obj \
+      $(OUTDIR)\clientcontext.obj \
+      $(OUTDIR)\planpane.obj \
       $(OUTDIR)\statlist.obj \
       $(OUTDIR)\statcach.obj \
       $(OUTDIR)\statbtn.obj \
@@ -39,3 +41,9 @@ $(OUTDIR)\merintr.dll: \
       $(OUTDIR)\merintr.res
 
 !include $(TOPDIR)\rules.mak
+
+$(OUTDIR)\inventry.obj: inventoryintent.h
+$(OUTDIR)\clientcontext.obj: clientcontext.h clientcontextmodel.h inventoryintent.h planpane.h
+$(OUTDIR)\planpane.obj: planpane.h clientcontextmodel.h inventoryintent.h
+$(OUTDIR)\stats.obj $(OUTDIR)\statbtn.obj $(OUTDIR)\inventry.obj: clientcontext.h stats.h
+$(OUTDIR)\statbtn.obj $(OUTDIR)\inventry.obj $(OUTDIR)\mermain.obj $(OUTDIR)\merintr.obj: planpane.h

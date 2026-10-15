@@ -14,6 +14,9 @@
 
 #include "client.h"
 #include "merintr.h"
+#include "inventoryintent.h"
+#include "clientcontext.h"
+#include "planpane.h"
 
 static HWND hwndInvDialog;      /* Inventory modeless dialog */
 static HWND hwndInv;            /* Inventory button (main area) */
@@ -198,6 +201,7 @@ void InventoryBoxCreate(HWND hParent)
 
    InventoryResetFont();
    InventoryChangeColor(COLOR_ID_ALL);
+   if (M59InventoryIntent::Enabled()) SetTimer(hwndInv, 0x59A1, 1000, NULL);
 }
 /************************************************************************/
 /*
@@ -205,6 +209,7 @@ void InventoryBoxCreate(HWND hParent)
  */
 void InventoryBoxDestroy(void)
 {
+   KillTimer(hwndInv, 0x59A1);
    DestroyWindow(hwndInv);
    DestroyWindow(hwndInvDialog);
    DestroyWindow(hwndInvScroll);
@@ -460,6 +465,24 @@ LRESULT CALLBACK InventoryProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lP
 
    switch (message)
    {
+   case WM_TIMER:
+     if (wParam == 0x59A1 && cinfo->player && cinfo->player->id) {
+       std::vector<M59InventoryIntent::Item> pack;
+       for (list_type current=items;current && pack.size()<=2048;current=current->next) {
+         InvItem* item=(InvItem*)current->data;if(!item || !item->obj)continue;
+         PlanPaneNoteIcon(LookupNameRsc(item->obj->name_res),item->obj->icon_res);
+         pack.push_back({GetObjId(item->obj->id),LookupNameRsc(item->obj->name_res),
+           IsNumberObj(item->obj->id)?item->obj->amount:1,item->is_using,item->obj->name_res,(unsigned int)item->obj->flags});
+       }
+       auto* player=cinfo->player;
+       M59InventoryIntent::Publish(cinfo->config->comm.hostname,cinfo->config->comm.sockport,cinfo->config->username,
+         LookupNameRsc(player->name_res),GetObjId(player->id),GetObjId(player->room_id),player->room_res,
+         (unsigned int)player->room_security,pack);
+       M59InventoryIntent::Poll(cinfo->config->username,GetObjId(player->id));
+       ClientContextInventory(pack);
+       InventoryRedraw();return 0;
+     }
+     break;
    case WM_KEYDOWN:
       if (HANDLE_WM_KEYDOWN_BLAK(hwnd, wParam, lParam, InventoryKey))
       	 return 0;
@@ -728,6 +751,9 @@ void InventoryDrawSingleItem(InvItem *item, int row, int col)
       }
    }
 
+   RECT sellArea={area.x,area.y,area.x+area.cx,area.y+area.cy};
+  M59InventoryIntent::Draw(hdc,sellArea,GetObjId(cinfo->player->id),GetObjId(item->obj->id),LookupNameRsc(item->obj->name_res));
+  ClientContextConditionDraw(hdc,sellArea,GetObjId(item->obj->id),LookupNameRsc(item->obj->name_res));
    ReleaseDC(hwndInv, hdc);
 }
 /************************************************************************/

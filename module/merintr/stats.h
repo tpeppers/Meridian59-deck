@@ -30,6 +30,8 @@ enum StatGroup : unsigned char {
    STATS_SPELLS = 3,
    STATS_SKILLS = 4,
    STATS_INVENTORY = 5,       // Not a real stat group, client-side only
+   STATS_DUM = 6,             // Local harness metadata; NEVER RequestStats(6/7).
+   STATS_PLAN = 7,
 };
 
 /* game statistics */
@@ -84,6 +86,7 @@ void StatsReceiveGroup(StatGroup group, list_type l);
 
 void DisplayStatGroup(StatGroup group, list_type l);
 void DisplayInventoryAsStatGroup(StatGroup group);
+void DisplayClientContextGroup(StatGroup group);
 void StatsShowGroup(bool bShow);
 
 #endif /* #ifndef _STATS_H */

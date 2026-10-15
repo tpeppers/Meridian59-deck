@@ -94,6 +94,20 @@ static SOCKET   dbg_sock        = INVALID_SOCKET;
 static struct sockaddr_in dbg_addr;
 static bool     dbg_once        = false;   // DebugInit has run; see the note there
 
+// ---- object-keyed annotations (see DebugAnnotationFor in m59dbg.h) ---------
+// Bounded like every other table here: a hostile or buggy sender must cost a
+// picture, never memory. Sixteen is far more than a conversation ever points
+// at once, and the soonest-expiring is replaced when it overflows.
+#define DBG_MAX_ANNOTATIONS 16
+typedef struct {
+   int      id;        // Meridian runtime object id
+   COLORREF colour;
+   DWORD    expires;   // GetTickCount() deadline; 0 = free slot
+} DbgAnnotation;
+static DbgAnnotation dbg_notes[DBG_MAX_ANNOTATIONS];
+static int      dbg_note_port  = 0;               // 0 = annotations switched off
+static SOCKET   dbg_note_sock  = INVALID_SOCKET;  // inbound, non-blocking, bound
+
 /*****************************************************************************/
 /*
  * OverlayPath:  Full path of the overlay file for a room.  Returns false if
@@ -469,9 +483,46 @@ void DebugInit(void)
       }
    }
 
-   if (dbg_enabled || dbg_port > 0)
-      debug(("m59dbg: overlay dir '%s', signal port %d\n",
-             dbg_enabled ? dbg_dir : "(off)", dbg_port));
+   /* The inbound half.  Winsock may already be started above for the outbound
+    * signal socket, but annotations must work when M59_SIGNAL_PORT is unset, so
+    * start it here too -- WSAStartup is refcounted, and the long note above
+    * explains why nothing in this file ever calls WSACleanup. */
+   if (getenv_s(&got, buf, sizeof(buf), "M59_ANNOTATE_PORT") == 0 && got > 1)
+      dbg_note_port = atoi(buf);
+
+   if (dbg_note_port > 0)
+   {
+      WSADATA wsa_in;
+      if (WSAStartup(MAKEWORD(1, 1), &wsa_in) == 0)
+      {
+         dbg_note_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+         if (dbg_note_sock != INVALID_SOCKET)
+         {
+            struct sockaddr_in bind_addr;
+            unsigned long nonblocking = 1;
+            memset(&bind_addr, 0, sizeof(bind_addr));
+            bind_addr.sin_family = AF_INET;
+            bind_addr.sin_port = htons((unsigned short) dbg_note_port);
+            bind_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            /* NON-BLOCKING BEFORE ANYTHING ELSE.  This is drained from MainIdle;
+             * a blocking recvfrom there would freeze the client whenever nothing
+             * was sending, which is exactly the cost a debugging aid must never
+             * impose on a live session. */
+            if (ioctlsocket(dbg_note_sock, FIONBIO, &nonblocking) != 0 ||
+                bind(dbg_note_sock, (struct sockaddr *) &bind_addr,
+                     sizeof(bind_addr)) != 0)
+            {
+               closesocket(dbg_note_sock);
+               dbg_note_sock = INVALID_SOCKET;
+               dbg_note_port = 0;
+            }
+         }
+      }
+   }
+
+   if (dbg_enabled || dbg_port > 0 || dbg_note_port > 0)
+      debug(("m59dbg: overlay dir '%s', signal port %d, annotate port %d\n",
+             dbg_enabled ? dbg_dir : "(off)", dbg_port, dbg_note_port));
 }
 /*****************************************************************************/
 /*
@@ -674,6 +725,157 @@ bool DebugKey(UINT vk, BOOL fDown, UINT flags)
 }
 /*****************************************************************************/
 /*
+ * DebugAnnotationFor:  Is this object highlighted, and in what colour?
+ *
+ * Called from the per-object draw, so it must be cheap and must never allocate,
+ * block or touch a file.  Expiry is checked here rather than swept, so a mark
+ * whose deadline has passed simply stops drawing on the next frame.
+ */
+bool DebugAnnotationFor(int object_id, COLORREF *out)
+{
+   int i;
+   DWORD now;
+
+   if (dbg_note_port <= 0 || object_id == 0)
+      return false;
+
+   now = GetTickCount();
+   for (i = 0; i < DBG_MAX_ANNOTATIONS; i++)
+   {
+      if (dbg_notes[i].expires == 0 || dbg_notes[i].id != object_id)
+         continue;
+      /* A tick count wraps about every 49 days; comparing the difference rather
+       * than the values means a wrap costs one stale frame, not a stuck mark. */
+      if ((int) (now - dbg_notes[i].expires) >= 0)
+      {
+         dbg_notes[i].expires = 0;
+         return false;
+      }
+      if (out != NULL)
+         *out = dbg_notes[i].colour;
+      return true;
+   }
+   return false;
+}
+/*****************************************************************************/
+/*
+ * DebugAnnotationRemember:  Record one, replacing any already held for that object.
+ */
+static void DebugAnnotationRemember(int object_id, COLORREF colour, int ttl_ms)
+{
+   int i, soonest = 0;
+   DWORD now = GetTickCount();
+
+   if (ttl_ms < 1000)   ttl_ms = 1000;
+   if (ttl_ms > 600000) ttl_ms = 600000;
+
+   for (i = 0; i < DBG_MAX_ANNOTATIONS; i++)
+      if (dbg_notes[i].expires != 0 && dbg_notes[i].id == object_id)
+      {
+         dbg_notes[i].colour = colour;
+         dbg_notes[i].expires = now + ttl_ms;
+         return;
+      }
+   for (i = 0; i < DBG_MAX_ANNOTATIONS; i++)
+      if (dbg_notes[i].expires == 0)
+      {
+         dbg_notes[i].id = object_id;
+         dbg_notes[i].colour = colour;
+         dbg_notes[i].expires = now + ttl_ms;
+         return;
+      }
+   for (i = 1; i < DBG_MAX_ANNOTATIONS; i++)
+      if ((int) (dbg_notes[i].expires - dbg_notes[soonest].expires) < 0)
+         soonest = i;
+   dbg_notes[soonest].id = object_id;
+   dbg_notes[soonest].colour = colour;
+   dbg_notes[soonest].expires = now + ttl_ms;
+}
+/*****************************************************************************/
+/*
+ * DebugAnnotationDrain:  Read whatever arrived, without ever waiting.
+ *
+ * The datagram is one line of key=value pairs rather than JSON, because this is
+ * C inside a game loop and a parser here would be a liability:
+ *
+ *    id=<object id> colour=<RRGGBB> ttl=<milliseconds>
+ *
+ * Anything unparsed is dropped in silence.  A malformed datagram must cost a
+ * picture and never a session -- the same rule the overlay file follows.
+ */
+static void DebugAnnotationDrain(void)
+{
+   char packet[512];
+   struct sockaddr_in from;
+   int fromlen, got, id, ttl;
+   unsigned int colour;
+   const char *at;
+
+   if (dbg_note_sock == INVALID_SOCKET)
+      return;
+
+   for (;;)
+   {
+      fromlen = sizeof(from);
+      got = recvfrom(dbg_note_sock, packet, sizeof(packet) - 1, 0,
+                     (struct sockaddr *) &from, &fromlen);
+      if (got <= 0)
+         return;                    /* WSAEWOULDBLOCK, or nothing waiting */
+      packet[got] = 0;
+
+      /* turn=<0..4095>: face this server angle, as if the player had turned there.
+       *
+       * The harness's cameraman (m59-harness tools/m59-cameraman.mjs) keeps a parked
+       * character's view on a fight for video.  It used to do this by forging BP_TURN
+       * into the client's stream through a proxy, and the client died on the first
+       * forged packet.  Doing it here instead goes through the ordinary path: set our
+       * own angle, and MoveUpdateServer sends the BP_REQ_TURN itself (statgame.c calls
+       * it every tick, so a turn throttled by MOVE_INTERVAL still reaches the server
+       * a moment later).  Loopback only, like the rest of this socket, and inert
+       * outside play. */
+      at = strstr(packet, "turn=");
+      if (at != NULL)
+      {
+         int angle = atoi(at + 5);
+         if (angle >= 0 && angle < MAX_ANGLE &&
+             state == STATE_GAME && GameGetState() == GAME_PLAY)
+         {
+            player.angle = ANGLE_STOC(angle) % NUMDEGREES;
+            MoveUpdateServer();
+            RedrawAll();
+         }
+         continue;
+      }
+
+      ttl = 20000;
+      colour = 0x00FF0000;          /* red, the attack colour */
+
+      at = strstr(packet, "id=");
+      if (at == NULL)
+         continue;
+      id = atoi(at + 3);
+      if (id == 0)
+         continue;
+
+      at = strstr(packet, "colour=");
+      if (at != NULL)
+         colour = (unsigned int) strtoul(at + 7, NULL, 16);
+
+      at = strstr(packet, "ttl=");
+      if (at != NULL)
+         ttl = atoi(at + 4);
+
+      /* The wire carries RRGGBB; PALETTERGB matches the game palette the way
+       * every other colour in this file does. */
+      DebugAnnotationRemember(id,
+                              PALETTERGB((colour >> 16) & 0xff,
+                                         (colour >> 8) & 0xff,
+                                         colour & 0xff),
+                              ttl);
+   }
+}
+/*****************************************************************************/
+/*
  * DebugIdle:  Keep the caption current and notice the overlay file changing.
  *
  * THE CAPTION IS THE CHEAPEST OF THE THREE FEATURES AND THE MOST USED.  The stock
@@ -683,6 +885,8 @@ bool DebugKey(UINT vk, BOOL fDown, UINT flags)
  */
 void DebugIdle(void)
 {
+   DebugAnnotationDrain();
+
    static DWORD last_title = 0, last_stat = 0;
    static int   last_room = -1;
    DWORD now = timeGetTime();

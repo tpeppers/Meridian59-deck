@@ -3,6 +3,7 @@
 ; 
 
 EXPORTS
+   M59ObservedDescription   @1000
 	GetModuleInfo		@1  NONAME
 	EventServerMessage      @2  NONAME
 	EventUserAction         @4  NONAME

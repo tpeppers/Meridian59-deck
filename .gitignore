@@ -164,3 +164,6 @@ pip-log.txt
 
 # Mac crap
 .DS_Store
+# Isolated native-context build and offline UI test outputs.
+/module/merintr/release-context-x64/
+/clientd3d/release-context-x64/

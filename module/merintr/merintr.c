@@ -12,6 +12,7 @@
 #include "client.h"
 #include "merintr.h"
 #include "skills.h"
+#include "planpane.h"
 
 HINSTANCE hInst;              // Handle of this DLL
 
@@ -342,6 +343,8 @@ static TypedCommand commands[] = {
 { "tguild",      CommandTellGuild, },
 { "safetyon",    CommandSafetyOn, },
 { "safetyoff",   CommandSafetyOff, },
+{ "plan",        CommandPlan, },       // harness PLAN tab rows (planpane.c)
+{ "fs",          CommandFleetScript, },
 { NULL,          NULL},    // Must end table this way
 };
 

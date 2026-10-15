@@ -11,6 +11,7 @@
 
 #include "client.h"
 #include "merintr.h"
+#include "planpane.h"
 
 // Buttons to add to toolbar by default
 // If you change this table, you MUST check the indices defined in mermain.h
@@ -244,6 +245,10 @@ bool InterfaceAction(int action, void *action_data)
    room_contents_node *r;
    static int lastRestWarning = 0;
    ID object_id;
+
+   // Keeper holds the controls (the proxy gate drops these packets anyway; this keeps the screen honest).
+   if (PlanPaneVetoes(action))
+      return false;
 
    if ((pinfo.resting || cinfo->effects->paralyzed) && 
        (IsMoveAction(action) || IsAttackAction(action)))
