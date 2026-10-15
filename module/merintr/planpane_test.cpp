@@ -54,6 +54,11 @@ int main(){
       "O\tcourier.request\titem\televerberry\televerberry%20%E2%80%94%20Joguer\n"
       "O\tcourier.request\titem\torc%20tooth\torc%20tooth\n"
       "A\tcourier.request\tcount\tcount\tTop%20up%20to\t20\n"
+      "E\tcourier.settings\tCourier\tscroll\tAutomated%20Courier\tc\tHow%20the%20courier%20trades%20with%20you\n"
+      "A\tcourier.settings\tmode\tchoice\tHandling\tmanual\n"
+      "O\tcourier.settings\tmode\tauto\tFull%20Auto\n"
+      "O\tcourier.settings\tmode\tmanual\tManual\n"
+      "A\tcourier.settings\tinstructions\tboolean\tWith%20instruction%20text\ttrue\n"
       "E\tfs.line\tFleetScript\tscroll\tRun%20a%20FleetScript%20line\t-\tAs%20typed\n"
       "A\tfs.line\tline\ttext\tLine\t\n"+extra+"END\n");};
 
@@ -69,9 +74,9 @@ int main(){
   PlanPaneInventory({{11,"diamond",40,false,0,0}});
   PlanPaneNoteIcon("elderberry",4242);
   desk("none","0","");Tick();PlanPaneShow();
-  assert(view.entries.size()==3&&view.entries[1].running&&view.entries[1].args.size()==2&&view.entries[1].args[0].options.size()==2);
+  assert(view.entries.size()==4&&view.entries[1].running&&view.entries[1].args.size()==2&&view.entries[1].args[0].options.size()==2);
   assert(view.entries[0].describe=="You spectate.\r\nLogging off releases.");
-  assert(rows.size()==6&&rows[0].header&&rows[0].group=="Control"&&!rows[1].header);
+  assert(rows.size()==7&&rows[0].header&&rows[0].group=="Control"&&!rows[1].header);
   assert(IconFor(view.entries[1])==0);              // "everberry" is not a known icon...
   view.entries[1].icon="elderberry";assert(IconFor(view.entries[1])==4242);   // ..."elderberry" is, from a spell or the pack
   RedrawWindow(list,NULL,NULL,RDW_INVALIDATE|RDW_UPDATENOW);
@@ -106,12 +111,24 @@ int main(){
 
   // 8. Typed commands: a unique prefix runs with key=value args; `fs` is the REPL line.
   desk("none",acked,"");Tick();
-  CommandPlan((char*)"courier item=orc%20tooth count=5");
+  CommandPlan((char*)"courier.req item=orc%20tooth count=5");
   assert(pending.size()==1&&pending.back().entry=="courier.request"&&pending.back().args=="item=orc%20tooth&count=5");
   CommandFleetScript((char*)" zheng-he-lap agents=hk2");
   assert(pending.back().entry=="fs.line"&&pending.back().args=="line=zheng-he-lap%20agents%3Dhk2");
   CommandPlan((char*)"nope");assert(said.back().find("no row")!=std::string::npos);
-  CommandPlan((char*)"courier");assert(activeGroup==STATS_PLAN&&editing==1);CloseArgs();
+  CommandPlan((char*)"courier");assert(said.back().find("more than one row")!=std::string::npos);
+  CommandPlan((char*)"courier.req");assert(activeGroup==STATS_PLAN&&editing==1&&dialog&&IsWindowVisible(dialog));CloseArgs();
+  assert(!dialog&&editing<0);
+
+  // 8b. A settings row opens as a form: dropdown + checkbox, a Save button, and the values it sends.
+  OpenArgs(2);assert(view.entries[2].configure&&dialog);
+  {char cap[16]={};GetWindowTextA(run,cap,sizeof(cap));assert(std::string(cap)=="Save");}
+  assert(SendMessage(inputs[1],BM_GETCHECK,0,0)==BST_CHECKED);           // default from the desk: true
+  SendMessage(inputs[0],CB_SETCURSEL,0,0);SendMessage(inputs[1],BM_SETCHECK,BST_UNCHECKED,0);SubmitArgs();
+  assert(pending.back().entry=="courier.settings"&&pending.back().args=="mode=auto&instructions=false");
+
+  // 8c. The players in the room go to the desk by name: that is how Full Auto knows the courier is here.
+  testRoom={{4242,"Zheng He"}};Tick();assert(slurp(in).find("W\t4242\tZheng%20He\n")!=std::string::npos);
 
   // 9. Someone else's file, or a torn one, is ignored rather than half-read.
   PlanView before=view;

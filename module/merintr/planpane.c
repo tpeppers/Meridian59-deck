@@ -32,7 +32,7 @@ namespace {
 using M59Context::Time;
 struct Option { std::string value, label; };
 struct Arg { std::string id, type, title, def; std::vector<Option> options; };
-struct PlanEntry { std::string id, group, icon, title, describe; bool running=false, disabled=false; std::vector<Arg> args; };
+struct PlanEntry { std::string id, group, icon, title, describe; bool running=false, disabled=false, configure=false; std::vector<Arg> args; };
 struct Message { Time seq=0; bool ok=false; std::string text; };
 struct PlanView { Time at=0, ack=0; std::string control="none", status; std::vector<PlanEntry> entries; std::vector<Message> messages; };
 struct Pending { Time seq; std::string entry, args; Time queued; };
@@ -40,7 +40,7 @@ struct Row { bool header; int entry; std::string group; };
 struct Invent { unsigned int id, amount; std::string name; };
 
 const int MAX_ARGS=6;
-HWND panel=NULL, list=NULL, detail=NULL, heading=NULL, run=NULL, cancel=NULL;
+HWND panel=NULL, list=NULL, detail=NULL, heading=NULL, run=NULL, cancel=NULL, dialog=NULL;
 HWND labels[MAX_ARGS]={}, inputs[MAX_ARGS]={};
 std::string root;
 PlanView view;
@@ -100,7 +100,7 @@ bool Parse(const std::string& text,PlanView& out){
     auto f=M59Context::Split(line);
     if(f[0]=="E"&&f.size()==7&&v.entries.size()<256){PlanEntry e;e.id=f[1];
       if(!Dec(f[2],e.group)||!Dec(f[3],e.icon)||!Dec(f[4],e.title)||!Dec(f[6],e.describe))return false;
-      e.running=f[5].find('r')!=std::string::npos;e.disabled=f[5].find('d')!=std::string::npos;v.entries.push_back(e);}
+      e.running=f[5].find('r')!=std::string::npos;e.disabled=f[5].find('d')!=std::string::npos;e.configure=f[5].find('c')!=std::string::npos;v.entries.push_back(e);}
     else if(f[0]=="A"&&f.size()==6&&!v.entries.empty()&&v.entries.back().id==f[1]&&v.entries.back().args.size()<MAX_ARGS){Arg a;a.id=f[2];a.type=f[3];
       if(!Dec(f[4],a.title)||!Dec(f[5],a.def))return false;v.entries.back().args.push_back(a);}
     else if(f[0]=="O"&&f.size()==5&&!v.entries.empty()&&v.entries.back().id==f[1]&&!v.entries.back().args.empty()&&v.entries.back().args.back().id==f[2]){
@@ -154,7 +154,6 @@ void DrawRow(const DRAWITEMSTRUCT* d){
 int SelectedEntry(){int i=(int)SendMessage(list,LB_GETCURSEL,0,0);return i>=0&&(size_t)i<rows.size()&&!rows[i].header?rows[i].entry:-1;}
 
 void Describe(){
-  if(editing>=0)return;
   std::string s;int i=SelectedEntry();
   if(!Fresh())s="The plan desk is not answering. Start it with:\r\n  node tools/m59-plan-desk.mjs --fleet <name>\r\nfrom maps/m59-harness. Your controls are your own.\r\n\r\n";
   else if(view.control=="keeper")s="KEEPER HAS THE CONTROLS. You are spectating; movement, combat and items are refused until you take control back.\r\n\r\n";
@@ -195,38 +194,67 @@ int FindEntry(const std::string& key){
     if(Fold(e.id).rfind(k,0)==0||Fold(e.title).rfind(k,0)==0){if(hit>=0)return -2;hit=(int)n;}}
   return hit;
 }
-void CloseArgs(){editing=-1;for(int n=0;n<MAX_ARGS;n++){ShowWindow(labels[n],SW_HIDE);ShowWindow(inputs[n],SW_HIDE);}
-  ShowWindow(heading,SW_HIDE);ShowWindow(run,SW_HIDE);ShowWindow(cancel,SW_HIDE);ShowWindow(list,SW_SHOW);
-  RECT r;GetClientRect(panel,&r);PlanPaneResize(-1,r.right,r.bottom);Describe();}
+// ARGUMENTS AND SETTINGS OPEN IN THEIR OWN WINDOW, like the Guild page: the stats pane is a
+// strip a few hundred pixels tall, and a settings row (flag 'c') is a small form, not a spell.
+LRESULT CALLBACK DialogProc(HWND h,UINT msg,WPARAM wp,LPARAM lp);
+void CloseArgs(){editing=-1;if(dialog){HWND d=dialog;dialog=NULL;DestroyWindow(d);}
+  for(int n=0;n<MAX_ARGS;n++)labels[n]=inputs[n]=NULL;run=cancel=heading=NULL;Describe();}
 void OpenArgs(int i){
-  const PlanEntry& e=view.entries[i];editing=i;Text(heading,e.title);
-  for(int n=0;n<MAX_ARGS;n++){
-    if(inputs[n])DestroyWindow(inputs[n]);inputs[n]=NULL;ShowWindow(labels[n],SW_HIDE);
-    if(n>=(int)e.args.size())continue;const Arg& a=e.args[n];Text(labels[n],a.title);ShowWindow(labels[n],SW_SHOW);
+  if(dialog)CloseArgs();
+  const PlanEntry& e=view.entries[i];editing=i;
+  static bool registered=false;
+  if(!registered){WNDCLASSA wc={};wc.lpfnWndProc=DialogProc;wc.hInstance=hInst;wc.lpszClassName="M59PlanSettings";
+    wc.hbrBackground=GetSysColorBrush(COLOR_BTNFACE);wc.hCursor=LoadCursor(NULL,IDC_ARROW);RegisterClassA(&wc);registered=true;}
+  const int W=440,pad=10,cw=W-2*pad-16;int y=pad;
+  HWND owner=GetAncestor(panel,GA_ROOT);RECT o;GetWindowRect(owner?owner:panel,&o);
+  dialog=CreateWindowExW(WS_EX_DLGMODALFRAME,L"M59PlanSettings",Wide(e.title).c_str(),WS_POPUP|WS_CAPTION|WS_SYSMENU,
+    0,0,W,200,owner,NULL,hInst,NULL);
+  HFONT font=(HFONT)GetStockObject(DEFAULT_GUI_FONT);
+  auto make=[&](const wchar_t* cls,const std::string& text,DWORD style,DWORD ex,int x,int yy,int w,int hh,int id){
+    HWND c=CreateWindowExW(ex,cls,Wide(text).c_str(),WS_CHILD|WS_VISIBLE|style,x,yy,w,hh,dialog,(HMENU)(INT_PTR)id,hInst,NULL);
+    SendMessage(c,WM_SETFONT,(WPARAM)font,TRUE);return c;};
+  std::string about=e.describe;if(about.size()>900)about=about.substr(0,900)+"...";
+  heading=make(L"EDIT",about,ES_MULTILINE|ES_READONLY|WS_VSCROLL,WS_EX_CLIENTEDGE,pad,y,cw,84,0);y+=92;
+  for(size_t n=0;n<e.args.size()&&n<MAX_ARGS;n++){const Arg& a=e.args[n];
+    if(a.type=="boolean"){
+      inputs[n]=make(L"BUTTON",a.title,BS_AUTOCHECKBOX|WS_TABSTOP,0,pad,y,cw,22,200+(int)n);
+      SendMessage(inputs[n],BM_SETCHECK,a.def=="true"?BST_CHECKED:BST_UNCHECKED,0);y+=28;continue;}
+    labels[n]=make(L"STATIC",a.title,SS_LEFT|SS_ENDELLIPSIS,0,pad,y,cw,16,0);y+=17;
     if(a.type=="choice"){
-      inputs[n]=CreateWindowExW(0,L"COMBOBOX",L"",WS_CHILD|WS_VISIBLE|WS_VSCROLL|WS_TABSTOP|CBS_DROPDOWNLIST,0,0,1,1,panel,(HMENU)(INT_PTR)(200+n),hInst,NULL);
-      int def=0;for(size_t o=0;o<a.options.size();o++){std::wstring w=Wide(a.options[o].label);SendMessageW(inputs[n],CB_ADDSTRING,0,(LPARAM)w.c_str());if(a.options[o].value==a.def)def=(int)o;}
+      inputs[n]=make(L"COMBOBOX",std::string(),CBS_DROPDOWNLIST|WS_VSCROLL|WS_TABSTOP,0,pad,y,cw,300,200+(int)n);
+      int def=0;for(size_t k=0;k<a.options.size();k++){std::wstring w=Wide(a.options[k].label);SendMessageW(inputs[n],CB_ADDSTRING,0,(LPARAM)w.c_str());if(a.options[k].value==a.def)def=(int)k;}
       SendMessage(inputs[n],CB_SETCURSEL,a.options.empty()?-1:def,0);
     } else {
-      inputs[n]=CreateWindowExW(WS_EX_CLIENTEDGE,L"EDIT",L"",WS_CHILD|WS_VISIBLE|WS_TABSTOP|ES_AUTOHSCROLL|(a.type=="count"?ES_NUMBER:0),0,0,1,1,panel,(HMENU)(INT_PTR)(200+n),hInst,NULL);
-      SendMessage(inputs[n],EM_SETLIMITTEXT,4000,0);Text(inputs[n],a.def);
+      inputs[n]=make(L"EDIT",a.def,ES_AUTOHSCROLL|WS_TABSTOP|(a.type=="count"?ES_NUMBER:0),WS_EX_CLIENTEDGE,pad,y,cw,22,200+(int)n);
+      SendMessage(inputs[n],EM_SETLIMITTEXT,4000,0);
     }
-    SendMessage(inputs[n],WM_SETFONT,(WPARAM)GetStockObject(DEFAULT_GUI_FONT),TRUE);
+    y+=30;
   }
-  ShowWindow(list,SW_HIDE);ShowWindow(heading,SW_SHOW);ShowWindow(run,SW_SHOW);ShowWindow(cancel,SW_SHOW);
-  RECT r;GetClientRect(panel,&r);PlanPaneResize(-1,r.right,r.bottom);
-  Text(detail,e.describe);if(inputs[0])SetFocus(inputs[0]);
+  y+=4;const int bw=(cw-10)/2;
+  run=make(L"BUTTON",e.configure?"Save":"Run",BS_DEFPUSHBUTTON|WS_TABSTOP,0,pad,y,bw,26,3);
+  cancel=make(L"BUTTON","Cancel",WS_TABSTOP,0,pad+bw+10,y,bw,26,4);y+=26+pad;
+  RECT want={0,0,W,y};AdjustWindowRectEx(&want,WS_POPUP|WS_CAPTION|WS_SYSMENU,FALSE,WS_EX_DLGMODALFRAME);
+  int ww=want.right-want.left,wh=want.bottom-want.top;
+  SetWindowPos(dialog,NULL,o.left+((o.right-o.left)-ww)/2,o.top+((o.bottom-o.top)-wh)/2,ww,wh,SWP_NOZORDER);
+  ShowWindow(dialog,SW_SHOW);if(inputs[0])SetFocus(inputs[0]);
 }
 void SubmitArgs(){
   if(editing<0||(size_t)editing>=view.entries.size()){CloseArgs();return;}
   const PlanEntry& e=view.entries[editing];std::string args;
   for(size_t n=0;n<e.args.size()&&n<MAX_ARGS;n++){const Arg& a=e.args[n];std::string v;
     if(a.type=="choice"){int s=(int)SendMessage(inputs[n],CB_GETCURSEL,0,0);if(s>=0&&(size_t)s<a.options.size())v=a.options[s].value;}
+    else if(a.type=="boolean")v=SendMessage(inputs[n],BM_GETCHECK,0,0)==BST_CHECKED?"true":"false";
     else {wchar_t buf[4001]={};GetWindowTextW(inputs[n],buf,4000);int k=WideCharToMultiByte(CP_UTF8,0,buf,-1,NULL,0,NULL,NULL);
       if(k>1){v.resize(k-1);WideCharToMultiByte(CP_UTF8,0,buf,-1,&v[0],k,NULL,NULL);}}
     if(!args.empty())args+="&";args+=ArgEnc(a.id)+"="+ArgEnc(v);
   }
   std::string id=e.id;CloseArgs();Queue(id,args);
+}
+LRESULT CALLBACK DialogProc(HWND h,UINT msg,WPARAM wp,LPARAM lp){
+  if(msg==WM_COMMAND&&LOWORD(wp)==3){SubmitArgs();return 0;}
+  if(msg==WM_COMMAND&&LOWORD(wp)==4){CloseArgs();return 0;}
+  if(msg==WM_CLOSE){CloseArgs();return 0;}
+  return DefWindowProc(h,msg,wp,lp);
 }
 void Activate(int i){
   if(i<0)return;const PlanEntry& e=view.entries[i];
@@ -235,6 +263,22 @@ void Activate(int i){
 }
 
 // ------------------------------------------------------------------ the loop
+// The other players in this room, by the names only this client can resolve. The courier's Full
+// Auto needs to know it is standing next to you; the broker has no room for a piloted body.
+#ifndef M59_CONTEXT_UI_TEST
+std::vector<std::pair<unsigned int,std::string>> RoomPlayers(){
+  std::vector<std::pair<unsigned int,std::string>> out;
+  if(!cinfo->current_room)return out;
+  for(list_type l=cinfo->current_room->contents;l&&out.size()<128;l=l->next){
+    room_contents_node* r=(room_contents_node*)l->data;
+    if(r&&(r->obj.flags&OF_PLAYER)&&r->obj.id!=cinfo->player->id)out.push_back({GetObjId(r->obj.id),LookupNameRsc(r->obj.name_res)});
+  }
+  return out;
+}
+#else
+std::vector<std::pair<unsigned int,std::string>> testRoom;
+std::vector<std::pair<unsigned int,std::string>> RoomPlayers(){return testRoom;}
+#endif
 void Tick(){
   if(root.empty()||!cinfo||!cinfo->player||!cinfo->player->id)return;
   auto b=M59Context::Split(ClientContextBinding());if(b.size()<5)return;
@@ -258,6 +302,7 @@ void Tick(){
   }
   std::ostringstream s;s<<"M59PLANREQ\t1\t"<<Now()<<'\t'<<b[0]<<'\t'<<b[1]<<'\t'<<b[2]<<'\t'<<b[3]<<'\t'<<b[4]<<'\t'<<(shown?1:0)<<'\n';
   for(size_t n=0;n<inventory.size()&&n<512;n++)s<<"I\t"<<inventory[n].id<<'\t'<<Enc(inventory[n].name)<<'\t'<<inventory[n].amount<<'\n';
+  for(const auto& o:RoomPlayers())s<<"W\t"<<o.first<<'\t'<<Enc(o.second)<<'\n';
   for(const auto& p:pending)s<<"R\t"<<p.seq<<'\t'<<p.entry<<'\t'<<Enc(p.args)<<'\n';
   s<<"END\n";Write(root+"\\plan\\in\\"+Pid()+".tsv",s.str());
 }
@@ -277,8 +322,6 @@ LRESULT CALLBACK PanelProc(HWND h,UINT msg,WPARAM wp,LPARAM lp){
     if(id==1&&code==LBN_SELCHANGE){int i=(int)SendMessage(list,LB_GETCURSEL,0,0);
       if(i>=0&&(size_t)i<rows.size()&&rows[i].header)SendMessage(list,LB_SETCURSEL,i+1<(int)rows.size()?i+1:-1,0);Describe();return 0;}
     if(id==1&&code==LBN_DBLCLK){Activate(SelectedEntry());return 0;}
-    if(id==3){SubmitArgs();return 0;}
-    if(id==4){CloseArgs();return 0;}
     break;}
   }
   return DefWindowProc(h,msg,wp,lp);
@@ -292,16 +335,11 @@ void PlanPaneCreate(HWND parent,const std::string& dir){
   list=CreateWindowExW(WS_EX_CLIENTEDGE,L"LISTBOX",L"",WS_CHILD|WS_VISIBLE|WS_VSCROLL|LBS_NOTIFY|LBS_OWNERDRAWFIXED|LBS_NOINTEGRALHEIGHT|WS_TABSTOP,0,0,1,1,panel,(HMENU)1,hInst,NULL);
   oldList=(WNDPROC)SetWindowLongPtr(list,GWLP_WNDPROC,(LONG_PTR)ListProc);
   detail=CreateWindowExW(WS_EX_CLIENTEDGE,L"EDIT",L"",WS_CHILD|WS_VISIBLE|WS_VSCROLL|ES_MULTILINE|ES_READONLY|ES_AUTOVSCROLL,0,0,1,1,panel,(HMENU)2,hInst,NULL);
-  heading=CreateWindowExW(0,L"STATIC",L"",WS_CHILD|SS_LEFT|SS_ENDELLIPSIS,0,0,1,1,panel,NULL,hInst,NULL);
-  run=CreateWindowA("BUTTON","Run",WS_CHILD|WS_TABSTOP|BS_DEFPUSHBUTTON,0,0,1,1,panel,(HMENU)3,hInst,NULL);
-  cancel=CreateWindowA("BUTTON","Cancel",WS_CHILD|WS_TABSTOP,0,0,1,1,panel,(HMENU)4,hInst,NULL);
-  for(int n=0;n<MAX_ARGS;n++)labels[n]=CreateWindowExW(0,L"STATIC",L"",WS_CHILD|SS_LEFT|SS_ENDELLIPSIS,0,0,1,1,panel,NULL,hInst,NULL);
-  for(HWND w:{detail,heading,run,cancel})SendMessage(w,WM_SETFONT,(WPARAM)GetStockObject(DEFAULT_GUI_FONT),TRUE);
-  for(int n=0;n<MAX_ARGS;n++)SendMessage(labels[n],WM_SETFONT,(WPARAM)GetStockObject(DEFAULT_GUI_FONT),TRUE);
+  SendMessage(detail,WM_SETFONT,(WPARAM)GetStockObject(DEFAULT_GUI_FONT),TRUE);
   CreateDirectoryA((root+"\\plan").c_str(),NULL);CreateDirectoryA((root+"\\plan\\in").c_str(),NULL);
   SetTimer(panel,1,1000,NULL);Describe();
 }
-void PlanPaneDestroy(){if(panel)DestroyWindow(panel);panel=list=detail=heading=run=cancel=NULL;
+void PlanPaneDestroy(){CloseArgs();if(panel)DestroyWindow(panel);panel=list=detail=NULL;
   for(int n=0;n<MAX_ARGS;n++)labels[n]=inputs[n]=NULL;view=PlanView();rows.clear();pending.clear();inventory.clear();editing=-1;shown=false;}
 void PlanPaneShow(){if(!panel)return;shown=true;ShowWindow(panel,SW_SHOW);Tick();Rebuild();}
 void PlanPaneHide(){if(!panel)return;shown=false;if(editing>=0)CloseArgs();ShowWindow(panel,SW_HIDE);}
@@ -310,15 +348,7 @@ void PlanPaneResize(int top,int w,int h){
   if(top>=0)MoveWindow(panel,0,top,std::max(1,w),std::max(1,h),TRUE);
   w=std::max(1,w);h=std::max(1,h);
   const int dh=std::max(48,h*35/100);
-  if(editing<0){MoveWindow(list,0,0,w,h-dh,TRUE);MoveWindow(detail,0,h-dh,w,dh,TRUE);return;}
-  int y=2;MoveWindow(heading,4,y,w-8,18,TRUE);y+=20;
-  const PlanEntry& e=view.entries[editing];
-  for(size_t n=0;n<e.args.size()&&n<MAX_ARGS;n++){
-    MoveWindow(labels[n],4,y,w-8,16,TRUE);y+=16;
-    if(inputs[n])MoveWindow(inputs[n],4,y,w-8,e.args[n].type=="choice"?260:22,TRUE);y+=26;
-  }
-  MoveWindow(run,4,y,(w-12)/2,24,TRUE);MoveWindow(cancel,8+(w-12)/2,y,(w-12)/2,24,TRUE);y+=28;
-  MoveWindow(detail,0,y,w,std::max(1,h-y),TRUE);
+  MoveWindow(list,0,0,w,h-dh,TRUE);MoveWindow(detail,0,h-dh,w,dh,TRUE);
 }
 void PlanPaneInventory(const std::vector<M59InventoryIntent::Item>& items){
   inventory.clear();for(const auto& i:items)inventory.push_back({i.id,i.amount,i.name});
