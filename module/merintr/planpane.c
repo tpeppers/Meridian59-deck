@@ -106,7 +106,10 @@ bool Parse(const std::string& text,PlanView& out){
     else if(f[0]=="O"&&f.size()==5&&!v.entries.empty()&&v.entries.back().id==f[1]&&!v.entries.back().args.empty()&&v.entries.back().args.back().id==f[2]){
       Option o;if(!Dec(f[3],o.value)||!Dec(f[4],o.label))return false;if(v.entries.back().args.back().options.size()<600)v.entries.back().args.back().options.push_back(o);}
     else if(f[0]=="M"&&f.size()==4){Message m;if(!M59Context::Number(f[1],m.seq)||!Dec(f[3],m.text))return false;m.ok=f[2]=="1";v.messages.push_back(m);}
-    else return false;
+    // A well-formed row past a cap (a 257th entry, a 7th argument, the options of a dropped argument)
+    // is SKIPPED, not fatal: one FleetScript with seven params once blanked the whole tab. Unknown
+    // row types and malformed fields still reject the reply.
+    else if(f[0]!="E"&&f[0]!="A"&&f[0]!="O"&&f[0]!="M")return false;
   }
   return false;
 }
