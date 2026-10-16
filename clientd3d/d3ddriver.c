@@ -98,7 +98,9 @@ bool D3DDriverProfileInit(void)
 	memset(&gPresentParam, 0, sizeof(gPresentParam));
 	gPresentParam.Windowed = TRUE;
 	gPresentParam.SwapEffect = D3DSWAPEFFECT_DISCARD;
-	gPresentParam.PresentationInterval = (config.gpuEfficiency) ? D3DPRESENT_INTERVAL_DEFAULT : D3DPRESENT_INTERVAL_IMMEDIATE;
+	// On vblank in both modes. IMMEDIATE let performance mode present 120 frames a second to a 60Hz
+	// panel: half of them were never shown, and the GPU time they took came out of everything else.
+	gPresentParam.PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
 	gPresentParam.BackBufferWidth = gScreenWidth;
 	gPresentParam.BackBufferHeight = gScreenHeight;
 	gPresentParam.BackBufferFormat = D3DFMT_A8R8G8B8;

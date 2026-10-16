@@ -52,6 +52,10 @@ static steady_clock_time_point lastEndFrame;
 static auto& chrono_time_now = std::chrono::steady_clock::now;
 
 static const int defaultMaxFps = 60;
+// A window nobody is looking at draws at this rate at most. Performance mode (gpuefficiency=false)
+// renders 1080p with the most multisampling the card offers; uncapped beside other windows that held
+// a third of an RTX 5060 Ti and made the whole desktop lag. A spectator still sees the keeper move.
+static const int backgroundMaxFps = 30;
 
 /************************************************************************/
 /*
@@ -341,6 +345,9 @@ void RedrawForce(void)
    msDrawFrame = elapsedMilliseconds;
 
    auto maxFPS = config.gpuEfficiency ? defaultMaxFps : config.maxFPS;
+   if (hMain != NULL && (IsIconic(hMain) || GetForegroundWindow() != hMain) &&
+       (maxFPS == 0 || maxFPS > backgroundMaxFps))
+      maxFPS = backgroundMaxFps;
    fps = 1000 / std::max(1LL, elapsedMilliseconds);
 
    if (maxFPS)
