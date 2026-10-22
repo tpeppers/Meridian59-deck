@@ -71,6 +71,9 @@ int main(){
   assert(req.rfind("M59PLANREQ\t2\t",0)==0&&req.find("\t"+pid+"\t127.0.0.1%3A5959\tt1\tKermit\t17\t0\n")!=std::string::npos);
   assert(!PlanPaneLocked()&&std::string(PlanPaneButtonLabel(nullptr))=="MANAGE");
   CommandPlan((char*)"");assert(!said.empty()&&said.back().find("not answering")!=std::string::npos);
+  // 1b. Unanswered, it asks for the other protocol (a desk from before protocol 2 rejects a "2"); answered, it stays.
+  protocolSince=Now()-4000;Tick();assert(slurp(in).rfind("M59PLANREQ\t1\t",0)==0&&protocol==1);
+  protocolSince=Now()-4000;Tick();assert(protocol==2);
 
   // 2. The desk's rows become a grouped, owner-drawn list; the newline in a description becomes CRLF.
   PlanPaneInventory({{11,"diamond",40,false,0,0}});

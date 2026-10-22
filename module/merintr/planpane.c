@@ -54,6 +54,11 @@ std::vector<Pending> pending;
 std::vector<Invent> inventory;
 std::map<std::string,ID> icons;
 Time lastSeq=0, lastShownMessage=0, lastVetoNotice=0;
+// THE PROTOCOL THIS CLIENT ASKS FOR. A desk from before protocol 2 rejects a "2" request outright
+// (and every desk on a deploy cut before 2026-10-21 is one), so a client that asked only for 2
+// would show "not answering" until the next deploy. Unanswered for three seconds, it asks the
+// other one; answered, it stays. Against an old desk that settles on 1 within a few seconds.
+int protocol=2;Time protocolSince=0;
 std::string lastControl="none";
 int editing=-1;   // entry index whose arguments are open, or -1
 bool shown=false;
@@ -492,7 +497,9 @@ void Tick(){
     // The tab button reads KEEPER while the gate is held; repaint it (it is a sibling under hStats).
     lastControl=control;RedrawWindow(GetParent(panel),NULL,NULL,RDW_INVALIDATE|RDW_ALLCHILDREN);
   }
-  std::ostringstream s;s<<"M59PLANREQ\t2\t"<<Now()<<'\t'<<b[0]<<'\t'<<b[1]<<'\t'<<b[2]<<'\t'<<b[3]<<'\t'<<b[4]<<'\t'<<(shown?1:0)<<'\n';
+  if(!protocolSince||Fresh())protocolSince=Now();
+  else if(Now()>protocolSince+3000){protocol=protocol==2?1:2;protocolSince=Now();}
+  std::ostringstream s;s<<"M59PLANREQ\t"<<protocol<<'\t'<<Now()<<'\t'<<b[0]<<'\t'<<b[1]<<'\t'<<b[2]<<'\t'<<b[3]<<'\t'<<b[4]<<'\t'<<(shown?1:0)<<'\n';
   for(size_t n=0;n<inventory.size()&&n<512;n++)s<<"I\t"<<inventory[n].id<<'\t'<<Enc(inventory[n].name)<<'\t'<<inventory[n].amount<<'\n';
   for(const auto& o:RoomPlayers())s<<"W\t"<<o.first<<'\t'<<Enc(o.second)<<'\n';
   for(const auto& p:pending)s<<"R\t"<<p.seq<<'\t'<<p.entry<<'\t'<<Enc(p.args)<<'\n';
@@ -532,7 +539,7 @@ void PlanPaneCreate(HWND parent,const std::string& dir){
   SetTimer(panel,1,1000,NULL);Describe();
 }
 void PlanPaneDestroy(){CloseArgs();if(panel)DestroyWindow(panel);panel=list=detail=NULL;
-  view=PlanView();rows.clear();pending.clear();inventory.clear();editing=-1;shown=false;}
+  view=PlanView();rows.clear();pending.clear();inventory.clear();editing=-1;shown=false;protocol=2;protocolSince=0;}
 void PlanPaneShow(){if(!panel)return;shown=true;ShowWindow(panel,SW_SHOW);Tick();Rebuild();}
 void PlanPaneHide(){if(!panel)return;shown=false;if(editing>=0)CloseArgs();ShowWindow(panel,SW_HIDE);}
 void PlanPaneResize(int top,int w,int h){
