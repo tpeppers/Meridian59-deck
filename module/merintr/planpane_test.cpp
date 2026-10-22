@@ -1,8 +1,9 @@
 // Offline test of the PLAN pane: hidden Win32 windows, a fake plan desk file, no game session.
-//   cl /EHsc /std:c++20 planpane_test.cpp user32.lib gdi32.lib && planpane_test
+//   cl /EHsc /std:c++20 planpane_test.cpp user32.lib gdi32.lib comctl32.lib && planpane_test
 #define NOMINMAX
 #include <windows.h>
 #include <windowsx.h>
+#include <commctrl.h>
 #include <cassert>
 #include <iostream>
 #include <filesystem>
@@ -39,6 +40,7 @@ static std::string slurp(const std::filesystem::path& p){std::ifstream f(p,std::
 static void put(const std::filesystem::path& p,const std::string& s){std::ofstream f(p,std::ios::binary);f<<s;}
 
 int main(){
+  InitCommonControls();
   char temp[MAX_PATH]={};GetTempPathA(MAX_PATH,temp);
   auto dir=std::filesystem::path(temp)/("m59-plan-test-"+std::to_string(GetCurrentProcessId()));
   std::filesystem::create_directories(dir/"plan"/"out");
@@ -66,8 +68,8 @@ int main(){
   Tick();
   assert(std::filesystem::exists(in));
   auto req=slurp(in);
-  assert(req.rfind("M59PLANREQ\t1\t",0)==0&&req.find("\t"+pid+"\t127.0.0.1%3A5959\tt1\tKermit\t17\t0\n")!=std::string::npos);
-  assert(!PlanPaneLocked()&&std::string(PlanPaneButtonLabel(nullptr))=="PLAN");
+  assert(req.rfind("M59PLANREQ\t2\t",0)==0&&req.find("\t"+pid+"\t127.0.0.1%3A5959\tt1\tKermit\t17\t0\n")!=std::string::npos);
+  assert(!PlanPaneLocked()&&std::string(PlanPaneButtonLabel(nullptr))=="MANAGE");
   CommandPlan((char*)"");assert(!said.empty()&&said.back().find("not answering")!=std::string::npos);
 
   // 2. The desk's rows become a grouped, owner-drawn list; the newline in a description becomes CRLF.
@@ -88,15 +90,15 @@ int main(){
   req=slurp(in);assert(req.find("R\t")!=std::string::npos&&req.find("\tcontrol.keeper\t\n")!=std::string::npos);
 
   // 4. A row with arguments opens them; the choice sends the VALUE, not the label.
-  OpenArgs(1);assert(editing==1&&IsWindowVisible(run)||editing==1);
-  SendMessage(inputs[0],CB_SETCURSEL,1,0);SetWindowTextA(inputs[1],"30");SubmitArgs();
+  OpenArgs(1);assert(editing==1&&Top()&&IsWindowVisible(Top()->run));
+  SendMessage(Top()->inputs[0],CB_SETCURSEL,1,0);SetWindowTextA(Top()->inputs[1],"30");SubmitArgs();
   assert(editing<0&&pending.size()==2&&pending.back().entry=="courier.request"&&pending.back().args=="item=orc%20tooth&count=30");
 
   // 5. The desk's ack clears what it took and its answer reaches the chat once.
   auto acked=std::to_string(pending.back().seq);
   desk("none",acked,"M\t"+acked+"\t1\tStanding%20request%20set\n");Tick();Tick();
   assert(pending.empty());
-  int answers=0;for(auto& s:said)if(s=="PLAN: Standing request set")answers++;assert(answers==1);
+  int answers=0;for(auto& s:said)if(s=="MANAGE: Standing request set")answers++;assert(answers==1);
 
   // 6. Keeper holds the controls: movement, turning, combat and items are refused; chat is not.
   desk("keeper",acked,"");Tick();
@@ -122,10 +124,60 @@ int main(){
 
   // 8b. A settings row opens as a form: dropdown + checkbox, a Save button, and the values it sends.
   OpenArgs(2);assert(view.entries[2].configure&&dialog);
-  {char cap[16]={};GetWindowTextA(run,cap,sizeof(cap));assert(std::string(cap)=="Save");}
-  assert(SendMessage(inputs[1],BM_GETCHECK,0,0)==BST_CHECKED);           // default from the desk: true
-  SendMessage(inputs[0],CB_SETCURSEL,0,0);SendMessage(inputs[1],BM_SETCHECK,BST_UNCHECKED,0);SubmitArgs();
+  {char cap[16]={};GetWindowTextA(Top()->run,cap,sizeof(cap));assert(std::string(cap)=="Save");}
+  assert(SendMessage(Top()->inputs[1],BM_GETCHECK,0,0)==BST_CHECKED);           // default from the desk: true
+  SendMessage(Top()->inputs[0],CB_SETCURSEL,0,0);SendMessage(Top()->inputs[1],BM_SETCHECK,BST_UNCHECKED,0);SubmitArgs();
   assert(pending.back().entry=="courier.settings"&&pending.back().args=="mode=auto&instructions=false");
+
+
+  // 8d. Protocol 2: a multi-select of agents, a dropdown that follows another argument, a slider whose
+  //     range follows another, an editable combo, and a nested FleetScript configured in its own form.
+  desk("none",acked,"");Tick();
+  {std::string body=slurp(out);body=body.replace(body.find("M59PLAN\t1\t"),10,"M59PLAN\t2\t");
+   std::string v2="E\tfs.buy\tFleetScript%3A%20public\tscroll\tbuy\t-\tBuy%20anything\n"
+     "A\tfs.buy\tagents\tagents\tagents\thk2\twho%20buys\n"
+     "O\tfs.buy\tagents\thk2\thk2%20%C2%B7%20Zheng%20He\t\n"
+     "O\tfs.buy\tagents\tt9\tt9\t\n"
+     "A\tfs.buy\tseller\tchoice\tseller\tA\t\n"
+     "O\tfs.buy\tseller\tA\tShop%20A\t\nO\tfs.buy\tseller\tB\tShop%20B\t\n"
+     "A\tfs.buy\titem\tchoice\titem\t\t\n"
+     "O\tfs.buy\titem\tx\tX\tseller%3DA\nO\tfs.buy\titem\ty\tY\tseller%3DB\nO\tfs.buy\titem\tz\tZ\tseller%3DB\n"
+     "A\tfs.buy\twithdraw\tnumber\twithdraw\t0\tshillings\n"
+     "N\tfs.buy\twithdraw\t0\t7000\tbank%3D376\nN\tfs.buy\twithdraw\t0\t0\tbank%3D0\n"
+     "A\tfs.buy\tbank\tchoice\tbank\t0\t\nO\tfs.buy\tbank\t0\tnone\t\nO\tfs.buy\tbank\t376\tJasper\t\n"
+     "A\tfs.buy\tback\tcombo\tback\t\t\nO\tfs.buy\tback\t38\t38%20%E2%80%94%20Tos\t\n"
+     "A\tfs.buy\ttask\ttask\tthen\t\t\nO\tfs.buy\ttask\t\t(none)\t\nO\tfs.buy\ttask\tfs.come-home\tcome-home\t\n"
+     "E\tfs.come-home\tFleetScript%3A%20public\tscroll\tcome-home\t-\tWalk%20home\n"
+     "A\tfs.come-home\tagents\tagents\tagents\t\t\nO\tfs.come-home\tagents\thk2\thk2\t\n"
+     "A\tfs.come-home\thome\tcombo\thome\t\t\nO\tfs.come-home\thome\t52\t52%20%E2%80%94%20Tos%20inn\t\n";
+   body.insert(body.rfind("END\n"),v2);put(out,body);}
+  Tick();
+  int buyAt=EntryById("fs.buy");assert(buyAt>=0&&view.entries[buyAt].args.size()==7&&view.entries[buyAt].args[0].help=="who buys");
+  assert(view.entries[buyAt].args[3].bounds.size()==2&&view.entries[buyAt].args[2].options[0].when=="seller=A");
+  OpenArgs(buyAt);Form* f=Top();assert(f&&!f->compose);
+  assert(SendMessage(f->inputs[0],LB_GETSEL,0,0)>0&&SendMessage(f->inputs[0],LB_GETSEL,1,0)==0);       // default hk2 preselected
+  SendMessage(f->inputs[0],LB_SETSEL,TRUE,1);assert(ValueOf(*f,0)=="hk2,t9");
+  assert(SendMessage(f->inputs[2],CB_GETCOUNT,0,0)==1&&ValueOf(*f,2)=="x");                            // seller A's shelf
+  SendMessage(f->inputs[1],CB_SETCURSEL,1,0);Refresh(*f,1);
+  assert(SendMessage(f->inputs[2],CB_GETCOUNT,0,0)==2&&ValueOf(*f,2)=="y");                            // seller B's shelf
+  assert(!IsWindowVisible(f->extras[3])||BoundOf(*f,3)->max==0);                                     // no bank: 0-0
+  SendMessage(f->inputs[4],CB_SETCURSEL,1,0);Refresh(*f,4);
+  assert(BoundOf(*f,3)&&BoundOf(*f,3)->max==7000&&SendMessage(f->extras[3],TBM_GETRANGEMAX,0,0)==7000);
+  SendMessage(f->extras[3],TBM_SETPOS,TRUE,2500);SendMessage(f->dlg,WM_HSCROLL,0,(LPARAM)f->extras[3]);assert(ValueOf(*f,3)=="2500");
+  SendMessage(f->inputs[5],CB_SETCURSEL,0,0);SetWindowTextW(f->inputs[5],L"38 \x2014 Tos");assert(ValueOf(*f,5)=="38");   // a picked label is its value
+  SetWindowTextA(f->inputs[5],"599");assert(ValueOf(*f,5)=="599");                                     // free text still goes
+  SendMessage(f->inputs[6],CB_SETCURSEL,1,0);assert(ValueOf(*f,6)=="fs.come-home");
+  OpenNested(*f,6);Form* c=Top();assert(c&&c!=f&&c->compose&&!c->inputs[0]&&!IsWindowEnabled(f->dlg));  // nested: no agents, parent disabled
+  SetWindowTextA(c->inputs[1],"52");SubmitArgs();
+  assert(Top()==f&&IsWindowEnabled(f->dlg)&&ValueOf(*f,6)=="fs.come-home?home=52");
+  OpenNested(*f,6);assert(ValueOf(*Top(),1)=="52");CloseForm(Top());assert(Top()==f&&ValueOf(*f,6)=="fs.come-home?home=52");  // reopened as configured
+  SubmitArgs();
+  assert(!Top()&&!dialog&&pending.back().entry=="fs.buy"&&
+    pending.back().args=="agents=hk2%2Ct9&seller=B&item=y&withdraw=2500&bank=376&back=599&task=fs.come-home%3Fhome%3D52");
+  // Closing the outer form closes a nested one with it.
+  OpenArgs(buyAt);SendMessage(Top()->inputs[6],CB_SETCURSEL,1,0);OpenNested(*Top(),6);assert(forms.size()==2);CloseForm(forms.front().get());assert(forms.empty()&&editing<0);
+  // A protocol-1 reply (an older desk) still parses: its rows have no help, no condition, no range.
+  desk("none",acked,"");Tick();assert(EntryById("fs.buy")<0&&view.entries.size()==4);
 
   // 8c. The players in the room go to the desk by name: that is how Full Auto knows the courier is here.
   testRoom={{4242,"Zheng He"}};Tick();assert(slurp(in).find("W\t4242\tZheng%20He\n")!=std::string::npos);

@@ -343,7 +343,8 @@ static TypedCommand commands[] = {
 { "tguild",      CommandTellGuild, },
 { "safetyon",    CommandSafetyOn, },
 { "safetyoff",   CommandSafetyOff, },
-{ "plan",        CommandPlan, },       // harness PLAN tab rows (planpane.c)
+{ "manage",      CommandPlan, },       // harness MANAGE tab rows (planpane.c)
+{ "plan",        CommandPlan, },       // its old name
 { "fs",          CommandFleetScript, },
 { NULL,          NULL},    // Must end table this way
 };
